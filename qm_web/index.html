@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BaHALA — Barangay Hazard & Alert Lifeline App</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header" id="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <path d="M14 2C7.373 2 2 7.373 2 14s5.373 12 12 12 12-5.373 12-12S20.627 2 14 2z" fill="#005F99" opacity="0.15"/>
+          <path d="M4 18c2-3 4-4 6-2s4 3 6 1 4-3 6-1" stroke="#005F99" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M4 22c2-3 4-4 6-2s4 3 6 1 4-3 6-1" stroke="#005F99" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+          <circle cx="14" cy="10" r="3" fill="#D62828"/>
+          <path d="M14 7V4M11 10H8M17 10h3" stroke="#D62828" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <span class="logo-main">BaHALA</span>
+        <span class="logo-sub">Flood Early Warning</span>
+      </div>
+    </div>
+
+    <nav class="nav-desktop">
+      <a href="#" class="nav-link active" data-page="home">Dashboard</a>
+      <a href="#" class="nav-link" data-page="report">Report Issue</a>
+      <a href="#" class="nav-link" data-page="view">View Reports</a>
+      <a href="#" class="nav-link" data-page="contacts">Emergency</a>
+    </nav>
+
+    <div class="header-actions">
+      <div class="alert-badge" id="alertBadge">
+        <span class="alert-dot"></span>
+        <span>ALERT ACTIVE</span>
+      </div>
+      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Nav -->
+  <div class="mobile-nav" id="mobileNav">
+    <a href="#" class="mobile-nav-link active" data-page="home">🏠 Dashboard</a>
+    <a href="#" class="mobile-nav-link" data-page="report">📋 Report Issue</a>
+    <a href="#" class="mobile-nav-link" data-page="view">📊 View Reports</a>
+    <a href="#" class="mobile-nav-link" data-page="contacts">🚨 Emergency Contacts</a>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<!-- PAGE: HOME -->
+<!-- ============================================================ -->
+<main id="page-home" class="page active">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="wave wave1"></div>
+      <div class="wave wave2"></div>
+      <div class="wave wave3"></div>
+    </div>
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="pulse-dot"></span>
+        Real-time Monitoring Active
+      </div>
+      <h1 class="hero-title">Community-Powered<br><em>Flood Protection</em></h1>
+      <p class="hero-desc">BaHALA helps barangay residents report, monitor, and respond to flood hazards in real time. Together, we keep our communities safe.</p>
+      <div class="hero-ctas">
+        <button class="btn-primary" data-page="report">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          Report an Issue
+        </button>
+        <button class="btn-secondary" data-page="view">
+          View All Reports
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+      <!-- STATUS STRIP -->
+      <div class="status-strip">
+        <div class="status-item">
+          <span class="status-num" id="statTotal">0</span>
+          <span class="status-label">Total Reports</span>
+        </div>
+        <div class="status-divider"></div>
+        <div class="status-item">
+          <span class="status-num status-red" id="statCritical">0</span>
+          <span class="status-label">Critical</span>
+        </div>
+        <div class="status-divider"></div>
+        <div class="status-item">
+          <span class="status-num status-yellow" id="statPending">0</span>
+          <span class="status-label">Pending</span>
+        </div>
+        <div class="status-divider"></div>
+        <div class="status-item">
+          <span class="status-num status-green" id="statResolved">0</span>
+          <span class="status-label">Resolved</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURE CARDS -->
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>System Features</h2>
+        <p>Everything you need to respond to flood emergencies</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card fc-blue" data-page="report">
+          <div class="fc-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div class="fc-content">
+            <h3>Hazard Map</h3>
+            <p>Interactive mapping of flood-prone areas with real-time incident markers across your barangay.</p>
+          </div>
+          <div class="fc-arrow">→</div>
+        </div>
+
+        <div class="feature-card fc-red" data-page="contacts">
+          <div class="fc-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          </div>
+          <div class="fc-content">
+            <h3>Early Warning System</h3>
+            <p>Automated alerts and notifications to residents when flood levels exceed critical thresholds.</p>
+          </div>
+          <div class="fc-arrow">→</div>
+        </div>
+
+        <div class="feature-card fc-teal" data-page="report">
+          <div class="fc-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <div class="fc-content">
+            <h3>Community Reporting</h3>
+            <p>Residents can submit geo-tagged flood reports with photos and severity ratings directly.</p>
+          </div>
+          <div class="fc-arrow">→</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RECENT REPORTS PREVIEW -->
+  <section class="recent-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Recent Reports</h2>
+        <button class="btn-link" data-page="view">View all →</button>
+      </div>
+      <div id="recentReportsList" class="recent-list">
+        <div class="empty-state-small">No reports yet. Be the first to submit one.</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============================================================ -->
+<!-- PAGE: REPORT ISSUE -->
+<!-- ============================================================ -->
+<main id="page-report" class="page">
+  <div class="page-header">
+    <div class="container">
+      <div class="page-header-inner">
+        <button class="back-btn" data-page="home">← Back</button>
+        <div>
+          <h1>Submit a Report</h1>
+          <p>Help your community by reporting flood-related hazards</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container form-container">
+    <div class="form-card">
+      <div class="form-section-title">
+        <div class="form-step">1</div>
+        <h3>Incident Details</h3>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label for="reportTitle">Report Title *</label>
+          <input type="text" id="reportTitle" placeholder="e.g. Flooded road near Barangay Hall" maxlength="100">
+          <span class="char-count" id="titleCount">0/100</span>
+        </div>
+
+        <div class="form-group">
+          <label for="reportType">Incident Type *</label>
+          <div class="select-wrapper">
+            <select id="reportType">
+              <option value="">Select type...</option>
+              <option value="road-flooding">Road Flooding</option>
+              <option value="house-flooding">House Flooding</option>
+              <option value="blocked-drainage">Blocked Drainage</option>
+              <option value="rising-water-level">Rising Water Level</option>
+              <option value="landslide">Landslide / Erosion</option>
+              <option value="structural-damage">Structural Damage</option>
+              <option value="evacuation-needed">Evacuation Needed</option>
+              <option value="other">Other Hazard</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reportSeverity">Severity Level *</label>
+          <div class="severity-picker" id="severityPicker">
+            <button type="button" class="sev-btn sev-low" data-value="low">🟡 Low</button>
+            <button type="button" class="sev-btn sev-medium" data-value="medium">🟠 Medium</button>
+            <button type="button" class="sev-btn sev-high" data-value="high">🔴 High</button>
+            <button type="button" class="sev-btn sev-critical" data-value="critical">🆘 Critical</button>
+          </div>
+          <input type="hidden" id="reportSeverity">
+        </div>
+
+        <div class="form-group">
+          <label for="reportBarangay">Barangay *</label>
+          <div class="select-wrapper">
+            <select id="reportBarangay">
+              <option value="">Select barangay...</option>
+              <option>Barangay 1 - Poblacion</option>
+              <option>Barangay 2 - San Jose</option>
+              <option>Barangay 3 - Sta. Cruz</option>
+              <option>Barangay 4 - Malinao</option>
+              <option>Barangay 5 - Bagong Silang</option>
+              <option>Barangay 6 - Kalikasan</option>
+              <option>Barangay 7 - Pag-asa</option>
+              <option>Barangay 8 - Mabuhay</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reportStreet">Street / Landmark *</label>
+          <input type="text" id="reportStreet" placeholder="e.g. Corner of Rizal and Mabini St.">
+        </div>
+
+        <div class="form-group full-width">
+          <label for="reportDescription">Description *</label>
+          <textarea id="reportDescription" rows="4" placeholder="Describe the flood situation in detail. Include water level, affected areas, and any immediate dangers..." maxlength="500"></textarea>
+          <span class="char-count" id="descCount">0/500</span>
+        </div>
+      </div>
+
+      <div class="form-section-title" style="margin-top:2rem">
+        <div class="form-step">2</div>
+        <h3>Reporter Information</h3>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="reporterName">Your Name *</label>
+          <input type="text" id="reporterName" placeholder="Full name">
+        </div>
+
+        <div class="form-group">
+          <label for="reporterContact">Contact Number *</label>
+          <input type="tel" id="reporterContact" placeholder="09XX-XXX-XXXX">
+        </div>
+
+        <div class="form-group full-width">
+          <label class="checkbox-label">
+            <input type="checkbox" id="reportAnonymous">
+            <span class="checkmark"></span>
+            Submit anonymously (your name won't be shown publicly)
+          </label>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-secondary" data-page="home">Cancel</button>
+        <button class="btn-primary" id="submitReportBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Submit Report
+        </button>
+      </div>
+
+      <!-- SUCCESS STATE -->
+      <div class="form-success" id="formSuccess">
+        <div class="success-icon">✓</div>
+        <h3>Report Submitted!</h3>
+        <p>Your report has been recorded. Authorities have been notified.</p>
+        <button class="btn-primary" data-page="view">View All Reports</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ -->
+<!-- PAGE: VIEW REPORTS -->
+<!-- ============================================================ -->
+<main id="page-view" class="page">
+  <div class="page-header">
+    <div class="container">
+      <div class="page-header-inner">
+        <button class="back-btn" data-page="home">← Back</button>
+        <div>
+          <h1>Community Reports</h1>
+          <p>All submitted flood incidents across barangays</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- FILTERS -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Filter by Severity</label>
+        <div class="filter-chips" id="severityFilter">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip chip-low" data-filter="low">Low</button>
+          <button class="chip chip-medium" data-filter="medium">Medium</button>
+          <button class="chip chip-high" data-filter="high">High</button>
+          <button class="chip chip-critical" data-filter="critical">Critical</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Filter by Status</label>
+        <div class="filter-chips" id="statusFilter">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="pending">Pending</button>
+          <button class="chip" data-filter="responding">Responding</button>
+          <button class="chip" data-filter="resolved">Resolved</button>
+        </div>
+      </div>
+      <div class="filter-search">
+        <input type="text" id="searchReports" placeholder="🔍 Search reports...">
+      </div>
+    </div>
+
+    <!-- TABLE (desktop) -->
+    <div class="reports-table-wrap">
+      <table class="reports-table" id="reportsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Location</th>
+            <th>Severity</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="reportsTableBody">
+        </tbody>
+      </table>
+    </div>
+
+    <!-- CARDS (mobile) -->
+    <div class="reports-cards" id="reportsCards"></div>
+
+    <div class="empty-state" id="emptyState" style="display:none">
+      <div class="empty-icon">📋</div>
+      <h3>No reports found</h3>
+      <p>Try adjusting your filters or submit a new report.</p>
+      <button class="btn-primary" data-page="report">Submit First Report</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ -->
+<!-- PAGE: EMERGENCY CONTACTS -->
+<!-- ============================================================ -->
+<main id="page-contacts" class="page">
+  <div class="page-header page-header-red">
+    <div class="container">
+      <div class="page-header-inner">
+        <button class="back-btn" data-page="home">← Back</button>
+        <div>
+          <h1>🚨 Emergency Contacts</h1>
+          <p>Reach responders immediately in case of emergency</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container contacts-container">
+    <div class="emergency-banner">
+      <span class="emergency-banner-icon">⚠️</span>
+      <div>
+        <strong>In immediate danger?</strong>
+        <p>Call 911 or your local emergency hotline immediately. Do not wait for online assistance.</p>
+      </div>
+      <a href="tel:911" class="emergency-call-btn">CALL 911</a>
+    </div>
+
+    <div class="contacts-grid">
+      <div class="contact-card cc-ndrrmc">
+        <div class="contact-icon">🏛️</div>
+        <div class="contact-info">
+          <h3>NDRRMC</h3>
+          <p>National Disaster Risk Reduction & Mgmt. Council</p>
+          <a href="tel:02-8911-1406" class="contact-number">02-8911-1406</a>
+          <a href="tel:911" class="contact-number">911</a>
+        </div>
+        <a href="tel:02-8911-1406" class="contact-call-btn">📞 Call</a>
+      </div>
+
+      <div class="contact-card cc-pagasa">
+        <div class="contact-icon">🌦️</div>
+        <div class="contact-info">
+          <h3>PAGASA</h3>
+          <p>Philippine Atmospheric, Geophysical & Astronomical Services</p>
+          <a href="tel:02-8284-0800" class="contact-number">02-8284-0800</a>
+        </div>
+        <a href="tel:02-8284-0800" class="contact-call-btn">📞 Call</a>
+      </div>
+
+      <div class="contact-card cc-bfp">
+        <div class="contact-icon">🚒</div>
+        <div class="contact-info">
+          <h3>Bureau of Fire Protection</h3>
+          <p>Fire and rescue emergency response</p>
+          <a href="tel:160" class="contact-number">160</a>
+        </div>
+        <a href="tel:160" class="contact-call-btn">📞 Call</a>
+      </div>
+
+      <div class="contact-card cc-pnp">
+        <div class="contact-icon">👮</div>
+        <div class="contact-info">
+          <h3>Philippine National Police</h3>
+          <p>Law enforcement and emergency assistance</p>
+          <a href="tel:117" class="contact-number">117</a>
+          <a href="tel:02-8722-0650" class="contact-number">02-8722-0650</a>
+        </div>
+        <a href="tel:117" class="contact-call-btn">📞 Call</a>
+      </div>
+
+      <div class="contact-card cc-redcross">
+        <div class="contact-icon">🏥</div>
+        <div class="contact-info">
+          <h3>Philippine Red Cross</h3>
+          <p>Humanitarian aid, rescue and relief operations</p>
+          <a href="tel:143" class="contact-number">143</a>
+          <a href="tel:02-8527-0000" class="contact-number">02-8527-0000</a>
+        </div>
+        <a href="tel:143" class="contact-call-btn">📞 Call</a>
+      </div>
+
+      <div class="contact-card cc-doh">
+        <div class="contact-icon">💊</div>
+        <div class="contact-info">
+          <h3>DOH Emergency Hotline</h3>
+          <p>Medical assistance during disasters</p>
+          <a href="tel:02-8651-7800" class="contact-number">02-8651-7800</a>
+          <a href="tel:1555" class="contact-number">1555</a>
+        </div>
+        <a href="tel:1555" class="contact-call-btn">📞 Call</a>
+      </div>
+    </div>
+
+    <!-- BARANGAY CONTACTS -->
+    <div class="section-header" style="margin-top:3rem">
+      <h2>Local Barangay Contacts</h2>
+      <p>Your immediate responders</p>
+    </div>
+
+    <div class="local-contacts">
+      <div class="local-contact">
+        <div class="lc-avatar">SK</div>
+        <div class="lc-info">
+          <strong>Barangay Captain</strong>
+          <span>Kapitan Juan dela Cruz</span>
+        </div>
+        <a href="tel:09171234567" class="lc-call">📞 09171234567</a>
+      </div>
+      <div class="local-contact">
+        <div class="lc-avatar">BT</div>
+        <div class="lc-info">
+          <strong>BDRRMC Head</strong>
+          <span>Maria Santos</span>
+        </div>
+        <a href="tel:09281234567" class="lc-call">📞 09281234567</a>
+      </div>
+      <div class="local-contact">
+        <div class="lc-avatar">EV</div>
+        <div class="lc-info">
+          <strong>Evacuation Center</strong>
+          <span>Barangay Covered Court</span>
+        </div>
+        <a href="tel:09391234567" class="lc-call">📞 09391234567</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- REPORT DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="reportModal">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- FLOATING EMERGENCY BTN (mobile) -->
+<a href="tel:911" class="fab-emergency">
+  <span>🚨</span>
+  <span class="fab-label">SOS</span>
+</a>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
