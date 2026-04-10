@@ -1,319 +1,414 @@
-/* ===================================================
-   BaHALA — Flood Early Warning System
-   app.js — Frontend + "Backend" (localStorage DB)
-   =================================================== */
-
+/* ============================================================
+   app.js — BaHALA v2 Application Logic
+   - Auth (user vs admin roles)
+   - Supabase real-time sync (falls back to localStorage)
+   - Interactive Leaflet Hazard Map
+   - Auto-delete resolved reports after 24h
+   - Admin-only: resolve, delete, status update
+   ============================================================ */
 'use strict';
 
 // ============================================================
-// DATABASE LAYER (localStorage-backed, simulating a backend)
+// GLOBALS
 // ============================================================
-const DB = {
-  STORE_KEY: 'bahala_reports_v2',
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
 
-  /** Seed data (shows on first load) */
-  seed() {
-    const seeded = localStorage.getItem('bahala_seeded');
-    if (seeded) return;
-    const samples = [
-      {
-        id: this._genId(),
-        title: 'Flooded road along Rizal Ave.',
-        type: 'road-flooding',
-        severity: 'high',
-        barangay: 'Barangay 1 - Poblacion',
-        street: 'Rizal Ave. near Palengke',
-        description: 'Water level approximately waist-deep. Cars cannot pass. Residents are wading through flood water.',
-        reporterName: 'Jose Reyes',
-        reporterContact: '09171234567',
-        anonymous: false,
-        status: 'responding',
-        date: new Date(Date.now() - 2 * 3600000).toISOString(),
-      },
-      {
-        id: this._genId(),
-        title: 'Blocked drainage causing backflow',
-        type: 'blocked-drainage',
-        severity: 'medium',
-        barangay: 'Barangay 3 - Sta. Cruz',
-        street: 'Mabini St. corner Del Pilar',
-        description: 'Drainage clogged with debris and garbage. Water is backing up into the street and adjacent houses.',
-        reporterName: 'Maria Santos',
-        reporterContact: '09281234567',
-        anonymous: false,
-        status: 'pending',
-        date: new Date(Date.now() - 5 * 3600000).toISOString(),
-      },
-      {
-        id: this._genId(),
-        title: 'CRITICAL: Evacuation needed — Purok 4',
-        type: 'evacuation-needed',
-        severity: 'critical',
-        barangay: 'Barangay 5 - Bagong Silang',
-        street: 'Purok 4 lower area near river',
-        description: 'Water level rising rapidly near the river bank. At least 15 families need immediate evacuation. Children and elderly at risk.',
-        reporterName: 'Pedro Cruz',
-        reporterContact: '09391234567',
-        anonymous: false,
-        status: 'responding',
-        date: new Date(Date.now() - 30 * 60000).toISOString(),
-      },
-      {
-        id: this._genId(),
-        title: 'House flooding — Ground floor submerged',
-        type: 'house-flooding',
-        severity: 'high',
-        barangay: 'Barangay 2 - San Jose',
-        street: 'Luna St. near Elementary School',
-        description: 'Ground floor completely flooded. Family belongings moved to second floor. Electric lines exposed to water.',
-        reporterName: 'Anonymous',
-        reporterContact: '',
-        anonymous: true,
-        status: 'pending',
-        date: new Date(Date.now() - 8 * 3600000).toISOString(),
-      },
-      {
-        id: this._genId(),
-        title: 'Rising water level at creek',
-        type: 'rising-water-level',
-        severity: 'low',
-        barangay: 'Barangay 6 - Kalikasan',
-        street: 'Near Sto. Nino Creek bridge',
-        description: 'Water level is still manageable but rising. Monitoring situation closely.',
-        reporterName: 'Liza Flores',
-        reporterContact: '09451234567',
-        anonymous: false,
-        status: 'resolved',
-        date: new Date(Date.now() - 24 * 3600000).toISOString(),
-      },
-    ];
-    localStorage.setItem(this.STORE_KEY, JSON.stringify(samples));
-    localStorage.setItem('bahala_seeded', '1');
-  },
-
-  _genId() {
-    return 'RPT-' + Date.now().toString(36).toUpperCase() + '-' +
-      Math.random().toString(36).substr(2, 4).toUpperCase();
-  },
-
-  /** READ all reports */
-  getAll() {
-    try {
-      return JSON.parse(localStorage.getItem(this.STORE_KEY) || '[]');
-    } catch { return []; }
-  },
-
-  /** READ single report by id */
-  getById(id) {
-    return this.getAll().find(r => r.id === id) || null;
-  },
-
-  /** CREATE new report */
-  create(data) {
-    const reports = this.getAll();
-    const report = {
-      id: this._genId(),
-      ...data,
-      status: 'pending',
-      date: new Date().toISOString(),
-    };
-    reports.unshift(report); // newest first
-    localStorage.setItem(this.STORE_KEY, JSON.stringify(reports));
-    return report;
-  },
-
-  /** UPDATE report status */
-  updateStatus(id, status) {
-    const reports = this.getAll();
-    const idx = reports.findIndex(r => r.id === id);
-    if (idx === -1) return null;
-    reports[idx].status = status;
-    reports[idx].updatedAt = new Date().toISOString();
-    localStorage.setItem(this.STORE_KEY, JSON.stringify(reports));
-    return reports[idx];
-  },
-
-  /** DELETE report */
-  delete(id) {
-    const reports = this.getAll().filter(r => r.id !== id);
-    localStorage.setItem(this.STORE_KEY, JSON.stringify(reports));
-  },
-
-  /** Query/filter reports */
-  query({ severity = 'all', status = 'all', search = '' } = {}) {
-    return this.getAll().filter(r => {
-      if (severity !== 'all' && r.severity !== severity) return false;
-      if (status !== 'all' && r.status !== status) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        return (
-          r.title.toLowerCase().includes(q) ||
-          r.barangay.toLowerCase().includes(q) ||
-          r.street.toLowerCase().includes(q) ||
-          r.type.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  },
-
-  /** Aggregate stats */
-  stats() {
-    const all = this.getAll();
-    return {
-      total:    all.length,
-      critical: all.filter(r => r.severity === 'critical').length,
-      pending:  all.filter(r => r.status === 'pending').length,
-      resolved: all.filter(r => r.status === 'resolved').length,
-    };
-  },
-};
-
-// ============================================================
-// APP STATE
-// ============================================================
-const State = {
+const App = {
   currentPage: 'home',
+  currentUser: null,
+  isAdmin: false,
   filters: { severity: 'all', status: 'all', search: '' },
+  mapFilters: { severity: 'all' },
+  map: null,
+  mapMarkers: [],
+  mapZones: [],
 };
 
 // ============================================================
 // HELPERS
 // ============================================================
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
 
 function formatDate(iso) {
-  const d = new Date(iso);
-  const now = new Date();
+  if (!iso) return '—';
+  const d = new Date(iso), now = new Date();
   const diff = (now - d) / 1000;
-  if (diff < 60)   return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 60)    return 'Just now';
+  if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
-  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('en-PH', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function timeUntilDelete(resolvedAt) {
+  const resolvedMs = new Date(resolvedAt).getTime();
+  const deleteAt   = resolvedMs + APP_CONFIG.resolvedDeleteAfterHours * 3600 * 1000;
+  const remaining  = deleteAt - Date.now();
+  if (remaining <= 0) return 'Deleting soon';
+  const h = Math.floor(remaining / 3600000);
+  const m = Math.floor((remaining % 3600000) / 60000);
+  return `${h}h ${m}m remaining`;
 }
 
 function typeLabel(type) {
   const map = {
-    'road-flooding':    '🌊 Road Flooding',
-    'house-flooding':   '🏠 House Flooding',
-    'blocked-drainage': '🔩 Blocked Drainage',
-    'rising-water-level': '📈 Rising Water',
-    'landslide':        '⛰️ Landslide',
-    'structural-damage':'🏗️ Structural Damage',
-    'evacuation-needed':'🆘 Evacuation',
-    'other':            '⚠️ Other',
+    'road-flooding':'🌊 Road Flooding','house-flooding':'🏠 House Flooding',
+    'blocked-drainage':'🔩 Blocked Drainage','rising-water-level':'📈 Rising Water',
+    'landslide':'⛰️ Landslide','structural-damage':'🏗️ Structural',
+    'evacuation-needed':'🆘 Evacuation','other':'⚠️ Other',
   };
   return map[type] || type;
 }
 
 function sevEmoji(sev) {
-  return { low: '🟡', medium: '🟠', high: '🔴', critical: '🆘' }[sev] || '⚪';
+  return { low:'🟡', medium:'🟠', high:'🔴', critical:'🆘' }[sev] || '⚪';
 }
 
-function showToast(msg, duration = 3000) {
+function showToast(msg, dur = 3500) {
   const t = $('#toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
+  setTimeout(() => t.classList.remove('show'), dur);
 }
 
 // ============================================================
-// ROUTING / PAGE NAVIGATION
+// NAVIGATION
 // ============================================================
 function navigate(page) {
   if (!page) return;
-  // Hide all pages
   $$('.page').forEach(p => p.classList.remove('active'));
-  // Show target
   const target = $(`#page-${page}`);
   if (!target) return;
   target.classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  State.currentPage = page;
+  App.currentPage = page;
 
-  // Update nav links
+  // Nav link highlight
   $$('[data-page]').forEach(el => {
-    el.classList.toggle('active', el.dataset.page === page);
+    if (el.classList.contains('nav-link') || el.classList.contains('mobile-nav-link')) {
+      el.classList.toggle('active', el.dataset.page === page);
+    }
   });
 
-  // Page-specific init
-  if (page === 'home')   refreshHome();
-  if (page === 'view')   refreshReports();
-  if (page === 'report') resetForm();
-
-  // Close mobile nav
   $('#mobileNav').classList.remove('open');
   $('#mobileMenuBtn').classList.remove('open');
+
+  // Page-specific inits
+  if (page === 'home')   initHome();
+  if (page === 'view')   initView();
+  if (page === 'map')    initMap();
+  if (page === 'report') resetForm();
 }
 
-// Delegate all [data-page] clicks
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-page]');
-  if (el) navigate(el.dataset.page);
+  if (!el) return;
+
+  // Don't navigate if clicking login nav btn and already signed in
+  if (el.id === 'loginNavBtn' && App.currentUser) return;
+  navigate(el.dataset.page);
+});
+
+// ============================================================
+// AUTH
+// ============================================================
+async function initAuth() {
+  const user = await Database.Auth.getUser();
+  if (user) setUser(user);
+  else clearUser();
+}
+
+function setUser(user) {
+  App.currentUser = user;
+  App.isAdmin     = Database.Auth.isAdmin(user);
+  const name      = user.user_metadata?.full_name || user.email.split('@')[0];
+  const initials  = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+  // Show user menu, hide login btn
+  $('#userMenu').style.display    = 'flex';
+  $('#loginNavBtn').style.display = 'none';
+  $('#mobileLoginLink').style.display = 'none';
+  $('#userAvatar').textContent    = initials;
+  $('#userNameDisplay').textContent = name;
+  $('#userRoleDisplay').textContent = App.isAdmin ? '🛡️ Admin' : '👤 Resident';
+
+  showToast(`✅ Signed in as ${name}${App.isAdmin ? ' (Admin)' : ''}`);
+}
+
+function clearUser() {
+  App.currentUser = null;
+  App.isAdmin     = false;
+  $('#userMenu').style.display    = 'none';
+  $('#loginNavBtn').style.display = 'block';
+  $('#mobileLoginLink').style.display = 'block';
+}
+
+// Auth Tab Toggle
+$$('.auth-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.auth-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    $('#signinForm').style.display = tab.dataset.tab === 'signin' ? 'flex' : 'none';
+    $('#signupForm').style.display = tab.dataset.tab === 'signup' ? 'flex' : 'none';
+  });
+});
+
+// Sign In
+$('#signInBtn').addEventListener('click', async () => {
+  const email    = $('#loginEmail').value.trim();
+  const password = $('#loginPassword').value;
+  if (!email || !password) { showToast('⚠️ Enter email and password.'); return; }
+  try {
+    $('#signInBtn').textContent = 'Signing in...';
+    const { user } = await Database.Auth.signIn(email, password);
+    setUser(user);
+    navigate('home');
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  } finally {
+    $('#signInBtn').textContent = 'Sign In →';
+  }
+});
+
+// Sign Up
+$('#signUpBtn').addEventListener('click', async () => {
+  const name     = $('#regName').value.trim();
+  const email    = $('#regEmail').value.trim();
+  const password = $('#regPassword').value;
+  if (!name || !email || !password) { showToast('⚠️ Fill in all fields.'); return; }
+  if (password.length < 8) { showToast('⚠️ Password must be at least 8 characters.'); return; }
+  try {
+    $('#signUpBtn').textContent = 'Creating account...';
+    await Database.Auth.signUp(email, password, name);
+    showToast('✅ Account created! You can now sign in.');
+    $$('.auth-tab')[0].click();
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  } finally {
+    $('#signUpBtn').textContent = 'Create Account →';
+  }
+});
+
+// Logout
+$('#logoutBtn').addEventListener('click', async () => {
+  await Database.Auth.signOut();
+  clearUser();
+  $('#userDropdown').style.display = 'none';
+  showToast('👋 Signed out.');
+  navigate('home');
+});
+
+// Avatar dropdown toggle
+$('#userAvatar').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const dd = $('#userDropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', () => {
+  if ($('#userDropdown')) $('#userDropdown').style.display = 'none';
 });
 
 // ============================================================
 // HOME PAGE
 // ============================================================
-function refreshHome() {
-  const stats = DB.stats();
-  $('#statTotal').textContent    = stats.total;
-  $('#statCritical').textContent = stats.critical;
-  $('#statPending').textContent  = stats.pending;
-  $('#statResolved').textContent = stats.resolved;
+async function initHome() {
+  try {
+    const s = await Database.stats();
+    $('#statTotal').textContent    = s.total;
+    $('#statCritical').textContent = s.critical;
+    $('#statPending').textContent  = s.pending;
+    $('#statResolved').textContent = s.resolved;
 
-  // Recent reports (last 3)
-  const recent = DB.getAll().slice(0, 3);
-  const list = $('#recentReportsList');
-  if (recent.length === 0) {
-    list.innerHTML = '<div class="empty-state-small">No reports yet. Be the first to submit one.</div>';
-    return;
-  }
-  list.innerHTML = recent.map(r => `
-    <div class="recent-item sev-${r.severity}" data-id="${r.id}">
-      <div>
-        <div class="recent-item-title">${r.title}</div>
-        <div class="recent-item-meta">${r.barangay} · ${formatDate(r.date)}</div>
+    const all = await Database.getAll();
+    const recent = all.slice(0, 4);
+    const list = $('#recentReportsList');
+
+    if (recent.length === 0) {
+      list.innerHTML = '<div class="empty-state-small">No reports yet. Be the first to submit one.</div>';
+      return;
+    }
+    list.innerHTML = recent.map(r => `
+      <div class="recent-item sev-${r.severity}" data-id="${r.id}">
+        <div style="flex:1">
+          <div class="recent-item-title">${r.title}</div>
+          <div class="recent-item-meta">${r.street} · ${formatDate(r.date)}</div>
+        </div>
+        <span class="sev-badge ${r.severity}">${sevEmoji(r.severity)} ${cap(r.severity)}</span>
       </div>
-      <span class="sev-badge ${r.severity}">${sevEmoji(r.severity)} ${cap(r.severity)}</span>
-    </div>
-  `).join('');
-
-  list.querySelectorAll('.recent-item').forEach(el => {
-    el.addEventListener('click', () => openModal(el.dataset.id));
-  });
+    `).join('');
+    list.querySelectorAll('.recent-item').forEach(el => {
+      el.addEventListener('click', () => openModal(el.dataset.id));
+    });
+  } catch (err) {
+    console.error('Home init error:', err);
+  }
 }
 
-function cap(str) {
-  return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
+// ============================================================
+// HAZARD MAP
+// ============================================================
+let mapInitialized = false;
+
+async function initMap() {
+  if (mapInitialized) {
+    await refreshMapMarkers();
+    return;
+  }
+
+  const L = window.L;
+  if (!L) { showToast('⚠️ Map library failed to load.'); return; }
+
+  const center = APP_CONFIG.mapCenter;
+  const map = L.map('hazardMap', {
+    center: [center.lat, center.lng],
+    zoom: APP_CONFIG.mapZoom,
+    zoomControl: true,
+  });
+  App.map = map;
+
+  // Tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // Draw hazard zones
+  const zoneColors = { critical: '#7C0000', high: '#D62828', medium: '#F97316', low: '#F59E0B' };
+  APP_CONFIG.hazardZones.forEach(zone => {
+    const color = zoneColors[zone.level] || '#64748B';
+    const poly = L.polygon(zone.coordinates, {
+      color:       color,
+      fillColor:   color,
+      fillOpacity: 0.25,
+      weight:      2,
+      dashArray:   zone.level === 'low' ? '6,4' : null,
+    }).addTo(map);
+    poly.bindPopup(`
+      <div>
+        <strong style="color:${color}">${zone.name}</strong><br>
+        <span style="font-size:0.78rem;color:#64748B;text-transform:capitalize">${zone.level} risk zone</span><br>
+        <p style="margin-top:6px;font-size:0.8rem">${zone.description}</p>
+      </div>
+    `);
+    App.mapZones.push(poly);
+  });
+
+  // Evacuation centers
+  const evIcon = L.divIcon({ html: '🏫', className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
+  APP_CONFIG.evacuationCenters.forEach(ec => {
+    L.marker([ec.lat, ec.lng], { icon: evIcon })
+      .addTo(map)
+      .bindPopup(`<strong>${ec.name}</strong><br>Capacity: ${ec.capacity} persons`);
+  });
+
+  // Barangay Hall
+  const hallIcon = L.divIcon({ html: '🏛️', className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
+  L.marker([center.lat, center.lng], { icon: hallIcon })
+    .addTo(map)
+    .bindPopup('<strong>Brgy. Marulas Hall</strong><br>Main coordination center');
+
+  mapInitialized = true;
+
+  // Center button
+  $('#mapCenterBtn').addEventListener('click', () => {
+    map.setView([center.lat, center.lng], APP_CONFIG.mapZoom);
+  });
+
+  // Severity filter
+  $('#mapSevFilter').addEventListener('click', async (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    $('#mapSevFilter .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    App.mapFilters.severity = chip.dataset.filter;
+    await refreshMapMarkers();
+  });
+
+  await refreshMapMarkers();
+}
+
+async function refreshMapMarkers() {
+  const L = window.L;
+  // Clear old markers
+  App.mapMarkers.forEach(m => App.map.removeLayer(m));
+  App.mapMarkers = [];
+
+  const reports = await Database.query({ severity: App.mapFilters.severity, status: 'all' });
+  const active  = reports.filter(r => r.status !== 'resolved');
+
+  const sevColors = { critical:'#7C0000', high:'#D62828', medium:'#F97316', low:'#F59E0B' };
+
+  // Use random offsets around Marulas center since we don't have exact GPS per report
+  const center = APP_CONFIG.mapCenter;
+  active.forEach((r, i) => {
+    // Deterministic offset based on report id hash
+    const seed = r.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    const lat  = center.lat + ((seed % 97) - 48) * 0.00015;
+    const lng  = center.lng + ((seed % 83) - 41) * 0.00015;
+    const color = sevColors[r.severity] || '#64748B';
+    const icon  = L.divIcon({
+      html: `<div style="background:${color};width:22px;height:22px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;font-size:10px">${sevEmoji(r.severity)}</div>`,
+      className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+    });
+    const marker = L.marker([lat, lng], { icon })
+      .addTo(App.map)
+      .bindPopup(`
+        <div>
+          <strong>${r.title}</strong><br>
+          <span style="font-size:0.75rem;color:#64748B">${r.street}</span><br>
+          <span style="display:inline-block;margin-top:5px;padding:1px 8px;background:${color};color:white;border-radius:999px;font-size:0.7rem;font-weight:600">${cap(r.severity)}</span>
+          <span style="display:inline-block;margin-top:5px;padding:1px 8px;background:#E2E8F0;border-radius:999px;font-size:0.7rem;font-weight:600;margin-left:4px">${cap(r.status)}</span>
+          <p style="margin-top:6px;font-size:0.78rem;color:#334155">${(r.description || '').slice(0, 120)}...</p>
+          <p style="font-size:0.72rem;color:#64748B;margin-top:4px">${formatDate(r.date)}</p>
+        </div>
+      `);
+    App.mapMarkers.push(marker);
+  });
+
+  // Sidebar incident list
+  const list = $('#mapIncidentList');
+  $('#incidentCount').textContent = active.length;
+  if (active.length === 0) {
+    list.innerHTML = '<div class="map-incident-empty">No active incidents matching filter.</div>';
+    return;
+  }
+  list.innerHTML = active.map((r, i) => `
+    <div class="map-incident-item sev-${r.severity}" data-idx="${i}">
+      <div class="map-incident-title">${r.title}</div>
+      <div class="map-incident-meta">${r.street} · ${formatDate(r.date)}</div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.map-incident-item').forEach((el, i) => {
+    el.addEventListener('click', () => {
+      if (App.mapMarkers[i]) {
+        App.mapMarkers[i].openPopup();
+        App.map.flyTo(App.mapMarkers[i].getLatLng(), 17);
+      }
+    });
+  });
 }
 
 // ============================================================
 // REPORT FORM
 // ============================================================
 function resetForm() {
-  const fields = ['reportTitle','reportType','reportSeverity','reportBarangay','reportStreet','reportDescription','reporterName','reporterContact'];
-  fields.forEach(id => { const el = $(`#${id}`); if (el) el.value = ''; });
-  $('#reportAnonymous').checked = false;
+  ['reportTitle','reportType','reportSeverity','reportStreet','reportDescription',
+   'reporterName','reporterContact'].forEach(id => {
+    const el = $(`#${id}`); if (el) el.value = '';
+  });
+  if ($('#reportAnonymous')) $('#reportAnonymous').checked = false;
   $$('.sev-btn').forEach(b => b.classList.remove('selected'));
-  $('#formSuccess').classList.remove('show');
+  const s = $('#formSuccess');
+  if (s) s.classList.remove('show');
   $('#titleCount').textContent = '0/100';
-  $('#descCount').textContent  = '0/500';
-
-  // Show form fields (in case they were hidden by success)
+  $('#descCount').textContent  = '0/600';
+  // Show form elements
   $$('.form-section-title, .form-grid, .form-actions').forEach(el => el.style.display = '');
 }
 
-// Char counters
-$('#reportTitle').addEventListener('input', function() {
-  $('#titleCount').textContent = `${this.value.length}/100`;
-});
-$('#reportDescription').addEventListener('input', function() {
-  $('#descCount').textContent = `${this.value.length}/500`;
-});
+$('#reportTitle').addEventListener('input', function() { $('#titleCount').textContent = `${this.value.length}/100`; });
+$('#reportDescription').addEventListener('input', function() { $('#descCount').textContent = `${this.value.length}/600`; });
 
-// Severity picker
 $$('.sev-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     $$('.sev-btn').forEach(b => b.classList.remove('selected'));
@@ -322,75 +417,94 @@ $$('.sev-btn').forEach(btn => {
   });
 });
 
-// Form submit
-$('#submitReportBtn').addEventListener('click', () => {
+$('#submitReportBtn').addEventListener('click', async () => {
   const data = {
     title:           $('#reportTitle').value.trim(),
     type:            $('#reportType').value,
     severity:        $('#reportSeverity').value,
-    barangay:        $('#reportBarangay').value,
     street:          $('#reportStreet').value.trim(),
     description:     $('#reportDescription').value.trim(),
     reporterName:    $('#reporterName').value.trim(),
     reporterContact: $('#reporterContact').value.trim(),
     anonymous:       $('#reportAnonymous').checked,
+    barangay:        'Brgy. Marulas',
   };
 
-  // Validation
-  const required = ['title','type','severity','barangay','street','description','reporterName'];
-  const missing  = required.filter(k => !data[k]);
-  if (missing.length) {
-    showToast('⚠️ Please fill in all required fields.');
-    return;
-  }
-
+  const missing = ['title','type','severity','street','description','reporterName'].filter(k => !data[k]);
+  if (missing.length) { showToast('⚠️ Please fill in all required fields.'); return; }
   if (data.anonymous) data.reporterName = 'Anonymous';
 
-  // Save to DB
-  const report = DB.create(data);
-
-  // Show success
-  $$('.form-section-title, .form-grid, .form-actions').forEach(el => el.style.display = 'none');
-  $('#formSuccess').classList.add('show');
-  showToast(`✅ Report ${report.id} submitted successfully!`);
+  try {
+    $('#submitReportBtn').textContent = 'Submitting...';
+    const report = await Database.create(data);
+    $$('.form-section-title, .form-grid, .form-actions').forEach(el => el.style.display = 'none');
+    $('#formSuccess').classList.add('show');
+    showToast(`✅ Report ${report.id} submitted! Synced to all users.`);
+    // Refresh home stats if open
+    mapInitialized = false; // force map refresh next visit
+  } catch (err) {
+    showToast('❌ Submission failed: ' + err.message);
+  } finally {
+    $('#submitReportBtn').textContent = '✓ Submit Report';
+  }
 });
+
+$('#submitAnotherBtn').addEventListener('click', resetForm);
 
 // ============================================================
 // VIEW REPORTS PAGE
 // ============================================================
-function refreshReports() {
-  const data = DB.query(State.filters);
-  renderTable(data);
-  renderCards(data);
+async function initView() {
+  // Show admin UI
+  $('#adminBadge').style.display    = App.isAdmin ? 'inline-flex' : 'none';
+  $('#resolveNotice').style.display = App.isAdmin ? 'block' : 'none';
 
-  const isEmpty = data.length === 0;
-  $('#emptyState').style.display    = isEmpty ? 'block' : 'none';
-  $('#reportsTableBody').closest('.reports-table-wrap').style.display = isEmpty ? 'none' : 'block';
-  $('#reportsCards').style.display  = isEmpty ? 'none' : 'flex';
+  await loadReports();
+}
+
+async function loadReports() {
+  try {
+    const reports = await Database.query(App.filters);
+    renderTable(reports);
+    renderCards(reports);
+    const empty = reports.length === 0;
+    $('#emptyState').style.display    = empty ? 'block' : 'none';
+    $('#reportsTableWrap').style.display = empty ? 'none' : 'block';
+    $('#reportsCards').style.display  = empty ? 'none' : 'flex';
+  } catch (err) {
+    showToast('❌ Failed to load reports: ' + err.message);
+  }
 }
 
 function renderTable(reports) {
   const tbody = $('#reportsTableBody');
-  tbody.innerHTML = reports.map(r => `
-    <tr>
-      <td><code style="font-size:0.75rem;color:var(--gray-500)">${r.id}</code></td>
-      <td><strong style="font-size:0.85rem">${r.title}</strong></td>
-      <td style="white-space:nowrap">${typeLabel(r.type)}</td>
-      <td>
-        <div style="font-size:0.82rem">${r.barangay}</div>
-        <div style="font-size:0.75rem;color:var(--gray-500)">${r.street}</div>
-      </td>
+  tbody.innerHTML = reports.map(r => {
+    const isResolved = r.status === 'resolved';
+    const countdown  = (isResolved && r.resolvedAt)
+      ? `<span class="countdown-badge">⏱ ${timeUntilDelete(r.resolvedAt)}</span>` : '';
+
+    const adminActions = App.isAdmin ? `
+      ${r.status !== 'resolved' ? `
+        <button class="action-btn" data-action="responding" data-id="${r.id}">🔵 Respond</button>
+        <button class="action-btn resolve-btn" data-action="resolve" data-id="${r.id}">✓ Resolve</button>
+      ` : ''}
+      <button class="action-btn delete-btn" data-action="delete" data-id="${r.id}">🗑</button>
+    ` : '';
+
+    return `<tr>
+      <td><code style="font-size:0.72rem;color:var(--gray-500)">${r.id}</code></td>
+      <td><strong style="font-size:0.83rem">${r.title}</strong>${countdown}</td>
+      <td style="white-space:nowrap;font-size:0.8rem">${typeLabel(r.type)}</td>
+      <td><div style="font-size:0.8rem">${r.barangay}</div><div style="font-size:0.72rem;color:var(--gray-500)">${r.street}</div></td>
       <td><span class="sev-badge ${r.severity}">${sevEmoji(r.severity)} ${cap(r.severity)}</span></td>
       <td><span class="status-badge ${r.status}">${cap(r.status)}</span></td>
-      <td style="white-space:nowrap;font-size:0.8rem;color:var(--gray-500)">${formatDate(r.date)}</td>
+      <td style="white-space:nowrap;font-size:0.77rem;color:var(--gray-500)">${formatDate(r.date)}</td>
       <td>
-        <div style="display:flex;gap:6px">
-          <button class="action-btn" data-action="view" data-id="${r.id}">View</button>
-          ${r.status !== 'resolved' ? `<button class="action-btn resolve-btn" data-action="resolve" data-id="${r.id}">✓ Resolve</button>` : ''}
-        </div>
+        <button class="action-btn" data-action="view" data-id="${r.id}">👁 View</button>
+        ${adminActions}
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--gray-500)">No reports found.</td></tr>';
 }
 
 function renderCards(reports) {
@@ -401,154 +515,202 @@ function renderCards(reports) {
         <div class="rc-title">${r.title}</div>
         <span class="sev-badge ${r.severity}">${sevEmoji(r.severity)}</span>
       </div>
-      <div class="rc-body">${r.barangay} · ${r.street}</div>
+      <div class="rc-body">${r.street}</div>
       <div class="rc-footer">
         <span class="status-badge ${r.status}">${cap(r.status)}</span>
-        <span style="font-size:0.75rem;color:var(--gray-500);margin-left:auto">${formatDate(r.date)}</span>
+        <span style="font-size:0.72rem;color:var(--gray-500);margin-left:auto">${formatDate(r.date)}</span>
       </div>
     </div>
   `).join('');
-
   container.querySelectorAll('.report-card').forEach(el => {
     el.addEventListener('click', () => openModal(el.dataset.id));
   });
 }
 
-// Filter chips
-$('#severityFilter').addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip');
-  if (!chip) return;
-  $('#severityFilter .chip').forEach(c => c.classList.remove('active'));
-  chip.classList.add('active');
-  State.filters.severity = chip.dataset.filter;
-  refreshReports();
-});
-
-$('#statusFilter').addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip');
-  if (!chip) return;
-  $('#statusFilter .chip').forEach(c => c.classList.remove('active'));
-  chip.classList.add('active');
-  State.filters.status = chip.dataset.filter;
-  refreshReports();
-});
-
-$('#searchReports').addEventListener('input', function() {
-  State.filters.search = this.value;
-  refreshReports();
-});
-
-// Table actions (view / resolve)
-$('#reportsTableBody').addEventListener('click', (e) => {
+// Table action delegation
+$('#reportsTableBody').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const { action, id } = btn.dataset;
-  if (action === 'view')    openModal(id);
-  if (action === 'resolve') resolveReport(id);
+
+  if (action === 'view') { openModal(id); return; }
+
+  // Admin-only actions
+  if (!App.isAdmin) { showToast('🔒 Admin access required.'); return; }
+
+  if (action === 'responding') {
+    await Database.updateStatus(id, 'responding');
+    showToast('🔵 Marked as Responding.');
+    await loadReports(); await initHome();
+  }
+  if (action === 'resolve') {
+    await Database.updateStatus(id, 'resolved');
+    showToast('✅ Report resolved. Auto-deletes in 24 hours.');
+    await loadReports(); await initHome();
+  }
+  if (action === 'delete') {
+    if (!confirm('Delete this report permanently?')) return;
+    await Database.deleteReport(id);
+    showToast('🗑️ Report deleted.');
+    await loadReports(); await initHome();
+  }
 });
 
-function resolveReport(id) {
-  DB.updateStatus(id, 'resolved');
-  showToast('✅ Report marked as resolved.');
-  refreshReports();
-  refreshHome();
-}
+// Filters
+$('#severityFilter').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  $('#severityFilter .chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  App.filters.severity = chip.dataset.filter;
+  loadReports();
+});
+$('#statusFilter').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  $('#statusFilter .chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  App.filters.status = chip.dataset.filter;
+  loadReports();
+});
+$('#searchReports').addEventListener('input', function() {
+  App.filters.search = this.value;
+  loadReports();
+});
+$('#refreshBtn').addEventListener('click', async () => {
+  showToast('↻ Refreshing...');
+  await loadReports();
+  await initHome();
+  showToast('✅ Data refreshed.');
+});
 
 // ============================================================
 // MODAL
 // ============================================================
-function openModal(id) {
-  const r = DB.getById(id);
+async function openModal(id) {
+  const r = await Database.getById(id);
   if (!r) return;
+
+  const adminActions = App.isAdmin ? `
+    <div class="modal-actions">
+      ${r.status !== 'resolved' ? `
+        <button class="action-btn" onclick="modalAction('responding','${r.id}')">🔵 Responding</button>
+        <button class="action-btn resolve-btn" onclick="modalAction('resolve','${r.id}')">✓ Resolve</button>
+      ` : `<span style="font-size:0.8rem;color:var(--green)">✅ Resolved · ${r.resolvedAt ? timeUntilDelete(r.resolvedAt) : ''}</span>`}
+      <button class="action-btn delete-btn" onclick="modalAction('delete','${r.id}')">🗑 Delete</button>
+    </div>
+  ` : '';
 
   $('#modalBody').innerHTML = `
     <div class="modal-sev-bar ${r.severity}"></div>
     <div class="modal-title">${r.title}</div>
     <div class="modal-sub">${r.id} · Submitted ${formatDate(r.date)}</div>
     <div class="modal-details">
-      <div class="modal-detail-item">
-        <label>Type</label>
-        <span>${typeLabel(r.type)}</span>
-      </div>
-      <div class="modal-detail-item">
-        <label>Severity</label>
-        <span><span class="sev-badge ${r.severity}">${sevEmoji(r.severity)} ${cap(r.severity)}</span></span>
-      </div>
-      <div class="modal-detail-item">
-        <label>Barangay</label>
-        <span>${r.barangay}</span>
-      </div>
-      <div class="modal-detail-item">
-        <label>Street / Landmark</label>
-        <span>${r.street}</span>
-      </div>
-      <div class="modal-detail-item">
-        <label>Status</label>
-        <span><span class="status-badge ${r.status}">${cap(r.status)}</span></span>
-      </div>
-      <div class="modal-detail-item">
-        <label>Reported by</label>
-        <span>${r.anonymous ? '🕵️ Anonymous' : r.reporterName}</span>
-      </div>
+      <div class="modal-detail-item"><label>Type</label><span>${typeLabel(r.type)}</span></div>
+      <div class="modal-detail-item"><label>Severity</label><span><span class="sev-badge ${r.severity}">${sevEmoji(r.severity)} ${cap(r.severity)}</span></span></div>
+      <div class="modal-detail-item"><label>Barangay</label><span>${r.barangay}</span></div>
+      <div class="modal-detail-item"><label>Location</label><span>${r.street}</span></div>
+      <div class="modal-detail-item"><label>Status</label><span><span class="status-badge ${r.status}">${cap(r.status)}</span></span></div>
+      <div class="modal-detail-item"><label>Reported By</label><span>${r.anonymous ? '🕵️ Anonymous' : r.reporterName}</span></div>
     </div>
     <div class="modal-desc">${r.description || 'No description provided.'}</div>
-    ${r.status !== 'resolved' ? `
-      <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
-        <button class="action-btn" onclick="updateModalStatus('${r.id}','responding');event.stopPropagation()">🔵 Mark Responding</button>
-        <button class="action-btn resolve-btn" onclick="updateModalStatus('${r.id}','resolved');event.stopPropagation()">✓ Resolve</button>
-      </div>
-    ` : ''}
+    ${adminActions}
   `;
-
   $('#modalOverlay').classList.add('open');
 }
 
-// Expose globally for onclick handlers
-window.updateModalStatus = function(id, status) {
-  DB.updateStatus(id, status);
-  showToast(`Report updated to: ${cap(status)}`);
+window.modalAction = async function(action, id) {
+  if (!App.isAdmin) { showToast('🔒 Admin only.'); return; }
   closeModal();
-  if (State.currentPage === 'view') refreshReports();
-  refreshHome();
+  if (action === 'responding') {
+    await Database.updateStatus(id, 'responding');
+    showToast('🔵 Marked as Responding.');
+  }
+  if (action === 'resolve') {
+    await Database.updateStatus(id, 'resolved');
+    showToast('✅ Resolved — auto-deletes in 24h.');
+  }
+  if (action === 'delete') {
+    if (!confirm('Delete this report?')) return;
+    await Database.deleteReport(id);
+    showToast('🗑️ Deleted.');
+  }
+  if (App.currentPage === 'view') await loadReports();
+  await initHome();
 };
 
-function closeModal() {
-  $('#modalOverlay').classList.remove('open');
-}
-
+function closeModal() { $('#modalOverlay').classList.remove('open'); }
 $('#modalClose').addEventListener('click', closeModal);
-$('#modalOverlay').addEventListener('click', (e) => {
-  if (e.target === $('#modalOverlay')) closeModal();
-});
+$('#modalOverlay').addEventListener('click', (e) => { if (e.target === $('#modalOverlay')) closeModal(); });
 
 // ============================================================
 // MOBILE MENU
 // ============================================================
 $('#mobileMenuBtn').addEventListener('click', function() {
-  const nav = $('#mobileNav');
-  nav.classList.toggle('open');
+  $('#mobileNav').classList.toggle('open');
   this.classList.toggle('open');
 });
 
 // ============================================================
-// LOGO NAVIGATION
+// REAL-TIME SYNC
 // ============================================================
-$('.logo').addEventListener('click', () => navigate('home'));
+function initRealtime() {
+  Database.subscribe(async (payload) => {
+    showToast('🔄 Data updated by another user.');
+    if (App.currentPage === 'home') await initHome();
+    if (App.currentPage === 'view') await loadReports();
+  });
+}
 
 // ============================================================
-// SIMULATE REAL-TIME: auto-refresh stats every 30s
+// AUTO-DELETE RESOLVED REPORTS (24h)
 // ============================================================
-setInterval(() => {
-  if (State.currentPage === 'home') refreshHome();
-  if (State.currentPage === 'view') refreshReports();
-}, 30000);
+async function runAutoPurge() {
+  const deleted = await Database.purgeExpiredResolved();
+  if (deleted > 0) {
+    showToast(`🗑️ ${deleted} expired resolved report(s) auto-deleted.`);
+    if (App.currentPage === 'home') await initHome();
+    if (App.currentPage === 'view') await loadReports();
+  }
+}
+
+// ============================================================
+// DB INDICATOR
+// ============================================================
+function updateDbIndicator(online) {
+  const el = $('#dbIndicator');
+  el.className = 'db-indicator ' + (online ? 'online' : 'offline');
+  el.querySelector('.db-label').textContent = online ? 'Live Sync' : 'Local DB';
+  el.title = online ? 'Connected to Supabase — real-time sync active' : 'Using localStorage — configure Supabase in config.js for real-time sync';
+}
 
 // ============================================================
 // BOOT
 // ============================================================
-DB.seed();
-navigate('home');
+async function boot() {
+  // Init database
+  const online = await Database.init();
+  updateDbIndicator(online);
 
-console.log('%cBaHALA Flood Early Warning System', 'color:#005F99;font-size:16px;font-weight:bold;');
-console.log('%cLocalStorage DB active. Data persists across sessions.', 'color:#64748B');
-console.log('%cAll reports:', 'color:#16A34A', DB.getAll());
+  // Init auth
+  await initAuth();
+
+  // Real-time if online
+  if (online) initRealtime();
+
+  // Auto-purge every hour
+  await runAutoPurge();
+  setInterval(runAutoPurge, 3600 * 1000);
+
+  // Refresh stats every 30s
+  setInterval(async () => {
+    if (App.currentPage === 'home') await initHome();
+  }, 30000);
+
+  // Initial page
+  navigate('home');
+
+  console.log('%cBaHALA v2 — Brgy. Marulas Flood Warning System', 'color:#005F99;font-size:14px;font-weight:bold');
+  console.log('%cSupabase:', 'color:#64748B', online ? '✅ Connected' : '⚠️ Not configured (localStorage mode)');
+  console.log('%cAdmin emails:', 'color:#64748B', APP_CONFIG.adminUsers);
+}
+
+boot();
