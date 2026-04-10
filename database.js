@@ -120,6 +120,7 @@ const Database = (() => {
       { email: 'bdrrmc@marulas.gov.ph', password: 'bdrrmc123', role: 'admin', name: 'BDRRMC Officer' },
       { email: 'captain@marulas.gov.ph', password: 'captain123', role: 'admin', name: 'Barangay Captain' },
       { email: 'resident@marulas.com', password: 'resident123', role: 'resident', name: 'Juan dela Cruz' },
+      { email: 'IAmAtomic@shadowgarden.com', password: 'CidKagenou', role: 'admin', name: 'Shadow' },
     ];
     const user = demoUsers.find(u => u.email === email && u.password === password);
     if (!user) throw new Error('Invalid email or password.');
