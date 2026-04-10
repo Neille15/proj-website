@@ -302,7 +302,7 @@ textarea{resize:vertical;min-height:96px}
 .filter-search input{min-height:34px;padding:7px 12px;font-size:0.85rem}
 .btn-refresh{background:var(--light-bg);color:var(--primary);border:1.5px solid rgba(0,95,153,0.2);padding:7px 14px;border-radius:var(--radius-sm);font-size:0.82rem;font-weight:600;cursor:pointer;min-height:36px;transition:all 0.2s}
 .btn-refresh:hover{background:var(--primary);color:white}
-.reports-table-wrap{background:white;border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:16px}
+.reports-table-wrap{background:white;border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow-x:auto;margin-bottom:16px}
 .reports-table{width:100%;border-collapse:collapse;font-size:0.82rem}
 .reports-table th{background:var(--gray-900);color:white;padding:12px 14px;text-align:left;font-family:var(--font-head);font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap}
 .reports-table td{padding:12px 14px;border-bottom:1px solid var(--gray-100);vertical-align:middle}
@@ -326,7 +326,7 @@ textarea{resize:vertical;min-height:96px}
 .countdown-badge{display:inline-flex;align-items:center;gap:3px;background:var(--amber-light);color:#92400E;padding:1px 7px;border-radius:999px;font-size:0.65rem;font-weight:600;margin-left:4px}
 
 /* MOBILE CARDS */
-.reports-cards{display:none;gap:10px;flex-direction:column;margin-bottom:16px}
+.reports-cards{display:none;gap:10px;flex-direction:column;margin-bottom:16px;}
 .report-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px;border-left:4px solid var(--gray-300);cursor:pointer;transition:all 0.2s}
 .report-card:hover{box-shadow:var(--shadow);transform:translateX(3px)}
 .report-card.sev-low{border-color:var(--amber)}
@@ -440,4 +440,28 @@ textarea{resize:vertical;min-height:96px}
   .status-divider{display:none}
   .status-item{min-width:50%}
   .severity-picker{display:grid;grid-template-columns:1fr 1fr}
+}
+
+/* --- Desktop vs Mobile Login Button Logic --- */
+
+/* 1. On small screens, hide the button from the header */
+@media (max-width: 768px) {
+  #loginNavBtn {
+    display: none !important;
+  }
+  
+  /* Optional: Ensure the mobile nav version is visible and styled nicely */
+
+
+  /* Make sure the header items don't look crowded now */
+  .header-right {
+    gap: 10px;
+  }
+}
+
+/* 2. On large screens, hide the mobile-specific link in case menu is toggled */
+@media (min-width: 769px) {
+  #mobileLoginLink {
+    display: none;
+  }
 }
