@@ -644,6 +644,8 @@ $('#modalOverlay').addEventListener('click', (e) => { if (e.target === $('#modal
 // ============================================================
 // MOBILE MENU
 // ============================================================
+
+
 $('#mobileMenuBtn').addEventListener('click', function() {
   $('#mobileNav').classList.toggle('open');
   this.classList.toggle('open');
