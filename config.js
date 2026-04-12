@@ -133,8 +133,33 @@ const APP_CONFIG = {
      $$DELETE FROM reports WHERE status = 'resolved' AND resolved_at < now() - interval '24 hours'$$
    );
 
-   -- Enable real-time on reports table
+   -- ============================================================
+   -- HAZARD ZONES TABLE
+   -- ============================================================
+   CREATE TABLE IF NOT EXISTS hazard_zones (
+     id               TEXT PRIMARY KEY DEFAULT 'HZ-' || gen_random_uuid()::text,
+     name             TEXT NOT NULL,
+     level            TEXT NOT NULL CHECK (level IN ('low','medium','high','critical')),
+     description      TEXT,
+     coordinates      JSONB NOT NULL,
+     created_by       TEXT,
+     created_at       TIMESTAMPTZ DEFAULT now()
+   );
+
+   ALTER TABLE hazard_zones ENABLE ROW LEVEL SECURITY;
+   CREATE POLICY "Anyone can read hazard zones" ON hazard_zones FOR SELECT USING (true);
+   CREATE POLICY "Admins can insert hazard zones" ON hazard_zones FOR INSERT WITH CHECK (
+     auth.email() = ANY(ARRAY['admin@marulas.gov.ph','bdrrmc@marulas.gov.ph','captain@marulas.gov.ph']) OR
+     (auth.jwt() ->> 'role') = 'admin'
+   );
+   CREATE POLICY "Admins can delete hazard zones" ON hazard_zones FOR DELETE USING (
+     auth.email() = ANY(ARRAY['admin@marulas.gov.ph','bdrrmc@marulas.gov.ph','captain@marulas.gov.ph']) OR
+     (auth.jwt() ->> 'role') = 'admin'
+   );
+
+   -- Enable real-time on reports and hazard_zones tables
    ALTER PUBLICATION supabase_realtime ADD TABLE reports;
+   ALTER PUBLICATION supabase_realtime ADD TABLE hazard_zones;
 
    -- ============================================================
    -- SUPABASE STORAGE — Report Images

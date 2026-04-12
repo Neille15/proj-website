@@ -335,6 +335,8 @@ const Database = (() => {
       anonymous:        reportData.anonymous,
       image_url:        reportData.imageUrl || null,
       status:           'pending',
+      lat:              reportData.lat !== undefined ? reportData.lat : null,
+      lng:              reportData.lng !== undefined ? reportData.lng : null,
     };
 
     if (isSupabaseReady) {
@@ -415,6 +417,54 @@ const Database = (() => {
   }
 
   /* ----------------------------------------------------------
+     HAZARD ZONES
+     ---------------------------------------------------------- */
+  async function getZones() {
+    if (isSupabaseReady) {
+      const { data, error } = await supabase.from('hazard_zones').select('*');
+      if (error) {
+        if (error.code === '42P01') return APP_CONFIG.hazardZones || []; // table missing, fallback
+        throw error;
+      }
+      return data;
+    }
+    const local = localStorage.getItem('bahala_zones_v3');
+    return local ? JSON.parse(local) : (APP_CONFIG.hazardZones || []);
+  }
+
+  async function createZone(zoneData) {
+    const payload = {
+      name: zoneData.name,
+      level: zoneData.level,
+      description: zoneData.description,
+      coordinates: zoneData.coordinates,
+      created_by: (await Auth.getUser())?.email || 'Local Admin',
+    };
+
+    if (isSupabaseReady) {
+      const { data, error } = await supabase.from('hazard_zones').insert(payload).select().single();
+      if (error) throw error;
+      return data;
+    }
+    const all = await getZones();
+    const newZone = { id: 'HZ-' + Date.now().toString(36).toUpperCase(), ...payload, created_at: new Date().toISOString() };
+    all.push(newZone);
+    localStorage.setItem('bahala_zones_v3', JSON.stringify(all));
+    return newZone;
+  }
+
+  async function deleteZone(id) {
+    if (isSupabaseReady) {
+      const { error } = await supabase.from('hazard_zones').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      const all = await getZones();
+      const filtered = all.filter(z => z.id !== id);
+      localStorage.setItem('bahala_zones_v3', JSON.stringify(filtered));
+    }
+  }
+
+  /* ----------------------------------------------------------
      NORMALIZATION — convert Supabase snake_case to camelCase
      ---------------------------------------------------------- */
   function _normalizeOne(r) {
@@ -432,6 +482,8 @@ const Database = (() => {
       anonymous:       r.anonymous,
       imageUrl:        r.image_url || r.imageUrl || null,
       status:          r.status,
+      lat:             r.lat !== undefined ? r.lat : null,
+      lng:             r.lng !== undefined ? r.lng : null,
       resolvedAt:      r.resolved_at || r.resolvedAt,
       date:            r.created_at || r.date,
       updatedAt:       r.updated_at || r.updatedAt,
@@ -515,6 +567,7 @@ const Database = (() => {
     getAll, getById, create,
     updateStatus, deleteReport,
     query, stats,
+    getZones, createZone, deleteZone,
     purgeExpiredResolved,
     get isOnline() { return isSupabaseReady; },
   };

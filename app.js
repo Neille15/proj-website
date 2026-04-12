@@ -88,6 +88,10 @@ function navigate(page) {
   target.classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   App.currentPage = page;
+  
+  if ($('#adminDrawToolbar')) {
+    $('#adminDrawToolbar').style.display = (App.isAdmin && page === 'map') ? 'flex' : 'none';
+  }
 
   $$('[data-page]').forEach(el => {
     if (el.classList.contains('nav-link') || el.classList.contains('mobile-nav-link')) {
@@ -133,6 +137,9 @@ function setUser(user) {
   $('#userAvatar').textContent    = initials;
   $('#userNameDisplay').textContent = name;
   $('#userRoleDisplay').textContent = App.isAdmin ? '🛡️ Admin' : '👤 Resident';
+  if ($('#adminDrawToolbar')) {
+    $('#adminDrawToolbar').style.display = (App.isAdmin && App.currentPage === 'map') ? 'flex' : 'none';
+  }
 
   showToast(`✅ Signed in as ${name}${App.isAdmin ? ' (Admin)' : ''}`);
 }
@@ -140,6 +147,7 @@ function setUser(user) {
 function clearUser() {
   App.currentUser = null;
   App.isAdmin     = false;
+  if ($('#adminDrawToolbar')) $('#adminDrawToolbar').style.display = 'none';
   $('#userMenu').style.display    = 'none';
   $('#loginNavBtn').style.display = 'block';
   $('#mobileLoginLink').style.display = 'block';
@@ -300,24 +308,131 @@ async function initMap() {
     maxZoom: 19,
   }).addTo(map);
 
-  const zoneColors = { critical: '#7C0000', high: '#D62828', medium: '#F97316', low: '#F59E0B' };
-  if (APP_CONFIG.hazardZones && APP_CONFIG.hazardZones.length) {
-    APP_CONFIG.hazardZones.forEach(zone => {
+  App.renderHazardZones = async () => {
+    App.mapZones.forEach(poly => map.removeLayer(poly));
+    App.mapZones = [];
+    const zones = await Database.getZones();
+    const zoneColors = { critical: '#7C0000', high: '#D62828', medium: '#F97316', low: '#F59E0B' };
+    
+    zones.forEach(zone => {
       const color = zoneColors[zone.level] || '#64748B';
+      if (!zone.coordinates || zone.coordinates.length < 3) return;
       const poly = L.polygon(zone.coordinates, {
-        color: color, fillColor: color, fillOpacity: 0.25,
+        color, fillColor: color, fillOpacity: 0.25,
         weight: 2, dashArray: zone.level === 'low' ? '6,4' : null,
       }).addTo(map);
-      poly.bindPopup(`
+      
+      let popupHtml = `
         <div>
           <strong style="color:${color}">${zone.name}</strong><br>
           <span style="font-size:0.78rem;color:#64748B;text-transform:capitalize">${zone.level} risk zone</span><br>
           <p style="margin-top:6px;font-size:0.8rem">${zone.description}</p>
-        </div>
-      `);
+      `;
+      if (App.isAdmin) {
+         popupHtml += `<button class="btn-cancel" style="margin-top:8px;padding:4px;font-size:0.7rem;width:100%" onclick="App._deleteZone('${zone.id}')">Delete Zone</button>`;
+      }
+      popupHtml += `</div>`;
+      
+      poly.bindPopup(popupHtml);
       App.mapZones.push(poly);
     });
-  }
+  };
+
+  App._deleteZone = async (id) => {
+    if (!confirm('Are you sure you want to delete this zone?')) return;
+    try {
+      await Database.deleteZone(id);
+      showToast('🗑️ Zone deleted');
+      App.renderHazardZones();
+    } catch(e) {
+      alert('Error deleting zone: ' + e.message);
+    }
+  };
+
+  await App.renderHazardZones();
+
+  // Drawing Logic
+  let isDrawing = false;
+  let currentPolyline = null;
+  let currentPoints = [];
+
+  $('#btnDrawStart').addEventListener('click', () => {
+    isDrawing = true;
+    currentPoints = [];
+    $('#btnDrawStart').style.display = 'none';
+    $('#btnDrawCancel').style.display = 'block';
+    $('#btnDrawFinish').style.display = 'block';
+    $('#drawInstructions').style.display = 'block';
+    $('#hazardMap').style.cursor = 'crosshair';
+  });
+
+  const stopDrawing = () => {
+    isDrawing = false;
+    if (currentPolyline) { map.removeLayer(currentPolyline); currentPolyline = null; }
+    $('#btnDrawStart').style.display = 'block';
+    $('#btnDrawCancel').style.display = 'none';
+    $('#btnDrawFinish').style.display = 'none';
+    $('#drawInstructions').style.display = 'none';
+    $('#hazardMap').style.cursor = '';
+  };
+
+  $('#btnDrawCancel').addEventListener('click', stopDrawing);
+
+  map.on('click', (e) => {
+    if (!isDrawing) return;
+    currentPoints.push([e.latlng.lat, e.latlng.lng]);
+    if (!currentPolyline) {
+      currentPolyline = L.polygon(currentPoints, {
+        color: '#D62828', fillColor: '#D62828', fillOpacity: 0.3, weight: 2, dashArray: '4'
+      }).addTo(map);
+    } else {
+      currentPolyline.setLatLngs(currentPoints);
+    }
+  });
+
+  $('#btnDrawFinish').addEventListener('click', () => {
+    if (currentPoints.length < 3) { showToast('⚠️ Draw at least 3 points to form a polygon.'); return; }
+    $('#zoneModalOverlay').classList.add('open');
+  });
+
+  // Zone Modal Handlers
+  $$('#zoneSeverityPicker .sev-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('#zoneSeverityPicker .sev-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      $('#zoneSeverity').value = btn.dataset.value;
+    });
+  });
+
+  $('#zoneCancelBtn').addEventListener('click', () => {
+    $('#zoneModalOverlay').classList.remove('open');
+  });
+
+  $('#zoneSaveBtn').addEventListener('click', async () => {
+    const name = $('#zoneName').value.trim();
+    const severity = $('#zoneSeverity').value;
+    const desc = $('#zoneDesc').value.trim();
+    if (!name || !severity) { showToast('⚠️ Name and Risk Level are required.'); return; }
+    
+    $('#zoneSaveBtn').textContent = 'Saving...';
+    try {
+      await Database.createZone({
+        name, level: severity, description: desc, coordinates: currentPoints
+      });
+      $('#zoneModalOverlay').classList.remove('open');
+      stopDrawing();
+      App.renderHazardZones();
+      showToast('✅ Saved risk zone');
+    } catch(e) {
+      alert('Error saving zone: ' + e.message);
+    } finally {
+      $('#zoneSaveBtn').textContent = 'Save Zone';
+      $('#zoneName').value = '';
+      $('#zoneSeverity').value = '';
+      $('#zoneDesc').value = '';
+      $$('#zoneSeverityPicker .sev-btn').forEach(b => b.classList.remove('selected'));
+    }
+  });
 
   const evIcon = L.divIcon({ html: '🏫', className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
   APP_CONFIG.evacuationCenters.forEach(ec => {
@@ -362,8 +477,8 @@ async function refreshMapMarkers() {
 
   active.forEach((r) => {
     const seed = r.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-    const lat  = center.lat + ((seed % 97) - 48) * 0.00015;
-    const lng  = center.lng + ((seed % 83) - 41) * 0.00015;
+    const lat  = r.lat ? r.lat : center.lat + ((seed % 97) - 48) * 0.00015;
+    const lng  = r.lng ? r.lng : center.lng + ((seed % 83) - 41) * 0.00015;
     const color = sevColors[r.severity] || '#64748B';
     const icon  = L.divIcon({
       html: `<div style="background:${color};width:22px;height:22px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;font-size:10px">${sevEmoji(r.severity)}</div>`,
@@ -415,9 +530,11 @@ async function refreshMapMarkers() {
 // ============================================================
 function resetForm() {
   ['reportTitle','reportType','reportSeverity','reportStreet','reportDescription',
-   'reporterName','reporterContact'].forEach(id => {
+   'reporterName','reporterContact','reportLat','reportLng'].forEach(id => {
     const el = $(`#${id}`); if (el) el.value = '';
   });
+  const statusEl = $('#locationStatus');
+  if (statusEl) statusEl.style.display = 'none';
   if ($('#reportAnonymous')) $('#reportAnonymous').checked = false;
   $$('.sev-btn').forEach(b => b.classList.remove('selected'));
   const s = $('#formSuccess');
@@ -435,13 +552,12 @@ function resetForm() {
   $('#imagePreview').src = '';
   $('#uploadProgressWrap').style.display = 'none';
   $('#uploadProgressBar').style.width = '0';
-  const actionBtns = $('.image-action-buttons');
-  if (actionBtns) actionBtns.style.display = 'flex';
+  if ($('#btnCameraImage')) $('#btnCameraImage').style.display = 'flex';
   const uploadZone = $('#imageUploadZone');
   if (uploadZone) {
     uploadZone.style.display = 'block';
     const textNode = uploadZone.querySelector('p');
-    if (textNode) textNode.textContent = 'Or drag and drop an image here';
+    if (textNode) textNode.textContent = 'Tap to Upload or Drag & Drop here';
   }
 }
 
@@ -456,9 +572,41 @@ $$('.sev-btn').forEach(btn => {
   });
 });
 
+// Geolocation
+$('#btnGetLocation').addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    showToast('⚠️ Geolocation not supported.');
+    return;
+  }
+  const statusEl = $('#locationStatus');
+  statusEl.textContent = 'Fetching location...';
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--primary)';
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      $('#reportLat').value = lat;
+      $('#reportLng').value = lng;
+      statusEl.textContent = `📍 GPS Acquired (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      statusEl.style.color = 'var(--green)';
+
+      // Auto-populate street field if empty using basic fetch (optional enrichment)
+      if (!$('#reportStreet').value) {
+        $('#reportStreet').value = `GPS Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      }
+    },
+    (err) => {
+      statusEl.textContent = `⚠️ Required: ${err.message}`;
+      statusEl.style.color = 'var(--red)';
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+});
+
 // Image file selection / camera capture
 $('#btnCameraImage').addEventListener('click', () => $('#reportImageCamera').click());
-$('#btnUploadImage').addEventListener('click', () => $('#reportImageUpload').click());
 
 const handleImageSelection = function() {
   const file = this.files[0];
@@ -470,7 +618,7 @@ const handleImageSelection = function() {
     $('#imagePreview').src = e.target.result;
     $('#imagePreviewWrap').style.display = 'block';
     $('#imageUploadZone').querySelector('p').textContent = file.name;
-    $('.image-action-buttons').style.display = 'none';
+    if ($('#btnCameraImage')) $('#btnCameraImage').style.display = 'none';
     $('#imageUploadZone').style.display = 'none';
   };
   reader.readAsDataURL(file);
@@ -500,9 +648,9 @@ $('#removeImageBtn').addEventListener('click', () => {
   if ($('#reportImageCamera')) $('#reportImageCamera').value = '';
   $('#imagePreview').src = '';
   $('#imagePreviewWrap').style.display = 'none';
-  $('.image-action-buttons').style.display = 'flex';
+  if ($('#btnCameraImage')) $('#btnCameraImage').style.display = 'flex';
   $('#imageUploadZone').style.display = 'block';
-  $('#imageUploadZone').querySelector('p').textContent = 'Or drag and drop an image here';
+  $('#imageUploadZone').querySelector('p').textContent = 'Tap to Upload or Drag & Drop here';
 });
 
 // Image preview click-to-zoom
@@ -525,6 +673,8 @@ $('#submitReportBtn').addEventListener('click', async () => {
     reporterContact: $('#reporterContact').value.trim(),
     anonymous:       $('#reportAnonymous').checked,
     barangay:        'Brgy. Marulas',
+    lat:             $('#reportLat').value ? parseFloat($('#reportLat').value) : null,
+    lng:             $('#reportLng').value ? parseFloat($('#reportLng').value) : null,
     imageUrl:        null,
   };
 

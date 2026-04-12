@@ -230,7 +230,7 @@ a{text-decoration:none;color:inherit}
 .admin-badge{display:inline-flex;align-items:center;gap:4px;background:var(--amber);color:#78350F;padding:2px 8px;border-radius:999px;font-size:0.7rem;font-weight:700;margin-left:8px}
 
 .map-layout{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 160px);min-height:500px}
-.map-sidebar{background:white;border-right:1px solid var(--gray-200);overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.map-sidebar{background:white;border-right:1px solid var(--gray-200);overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px;}
 .map-legend h4,.map-filter-section h4,.map-incidents h4{font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-500);margin-bottom:8px}
 .legend-item{display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--gray-700);padding:3px 0}
 .legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
@@ -257,6 +257,18 @@ a{text-decoration:none;color:inherit}
 .map-controls{position:absolute;bottom:16px;right:16px;z-index:500;display:flex;flex-direction:column;gap:6px}
 .map-ctrl-btn{width:40px;height:40px;border-radius:var(--radius-sm);background:white;border:1px solid var(--gray-200);font-size:1.1rem;cursor:pointer;box-shadow:var(--shadow-sm);transition:all 0.2s;display:flex;align-items:center;justify-content:center}
 .map-ctrl-btn:hover{background:var(--light-bg);border-color:var(--primary)}
+.admin-draw-toolbar {
+  position: absolute;
+  top: 16px; left: 50%; transform: translateX(-50%); z-index: 1000;
+  display: flex; gap: 8px; align-items: center;
+  background: white; padding: 8px; border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.draw-instructions {
+  background: rgba(0,0,0,0.7); color: white;
+  padding: 6px 12px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);
+  font-size: 0.8rem; font-weight: 500; margin-left: 8px;
+}
 
 /* FORM */
 .form-container{padding:32px 20px 60px}
@@ -504,8 +516,9 @@ textarea{resize:vertical;min-height:96px}
   .feature-grid{grid-template-columns:1fr}
   .signal-grid{grid-template-columns:1fr 1fr}
   .map-layout{grid-template-columns:1fr;grid-template-rows:240px 1fr}
-  .map-sidebar{order:2;height:auto;max-height:260px;flex-direction:row;flex-wrap:wrap}
-  .map-incidents{order:3;width:100%}
+  .map-sidebar{order:2;height:auto;max-height:260px;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;align-items:flex-start;padding-bottom:12px;}
+  .map-sidebar > div { flex-shrink:0; min-width:240px; margin-right:12px; }
+  .map-incidents{order:3;width:auto;min-width:300px;overflow-y:auto;max-height:220px;}
   .map-main{order:1}
   #hazardMap{height:100%}
 }

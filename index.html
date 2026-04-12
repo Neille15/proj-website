@@ -280,6 +280,12 @@
       <div class="map-controls">
         <button class="map-ctrl-btn" id="mapCenterBtn" title="Center on Brgy. Marulas">🎯</button>
       </div>
+      <div id="adminDrawToolbar" class="admin-draw-toolbar" style="display:none;">
+        <button class="btn-primary" id="btnDrawStart">✏️ Draw Risk Zone</button>
+        <button class="btn-cancel" tabindex="0" id="btnDrawCancel" style="display:none;background:white;color:var(--gray-700);">Cancel</button>
+        <button class="btn-submit" id="btnDrawFinish" style="display:none;background:var(--green);">✓ Save Zone</button>
+        <div id="drawInstructions" class="draw-instructions" style="display:none;">Click map to add points</div>
+      </div>
     </div>
   </div>
 </main>
@@ -302,7 +308,16 @@
         <div class="form-group full-width"><label>Report Title *</label><input type="text" id="reportTitle" placeholder="e.g. Flooded road near Barangay Hall" maxlength="100"><span class="char-count" id="titleCount">0/100</span></div>
         <div class="form-group"><label>Incident Type *</label><div class="select-wrapper"><select id="reportType"><option value="">Select type...</option><option value="road-flooding">Road Flooding</option><option value="house-flooding">House Flooding</option><option value="blocked-drainage">Blocked Drainage</option><option value="rising-water-level">Rising Water Level</option><option value="landslide">Landslide / Erosion</option><option value="structural-damage">Structural Damage</option><option value="evacuation-needed">Evacuation Needed</option><option value="other">Other Hazard</option></select></div></div>
         <div class="form-group"><label>Severity Level *</label><div class="severity-picker" id="severityPicker"><button type="button" class="sev-btn sev-low" data-value="low">🟡 Low</button><button type="button" class="sev-btn sev-medium" data-value="medium">🟠 Medium</button><button type="button" class="sev-btn sev-high" data-value="high">🔴 High</button><button type="button" class="sev-btn sev-critical" data-value="critical">🆘 Critical</button></div><input type="hidden" id="reportSeverity"></div>
-        <div class="form-group full-width"><label>Street / Landmark *</label><input type="text" id="reportStreet" placeholder="e.g. Marulas Road near Purok 3 basketball court"></div>
+        <div class="form-group full-width">
+          <label>Street / Landmark *</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="reportStreet" placeholder="e.g. Marulas Road near Purok 3 basketball court" style="flex:1;">
+            <button type="button" id="btnGetLocation" class="btn-cancel" style="padding:0; width:46px; min-height:46px; display:flex; align-items:center; justify-content:center; flex-shrink:0;" title="Get GPS Location">📍</button>
+          </div>
+          <input type="hidden" id="reportLat">
+          <input type="hidden" id="reportLng">
+          <small id="locationStatus" style="color:var(--gray-500);display:none;margin-top:4px;"></small>
+        </div>
         <div class="form-group full-width"><label>Description *</label><textarea id="reportDescription" rows="4" placeholder="Describe the situation. Include water level, number of families affected, and any immediate dangers..." maxlength="600"></textarea><span class="char-count" id="descCount">0/600</span></div>
       </div>
 
@@ -319,16 +334,15 @@
       <div class="form-grid">
         <div class="form-group full-width">
           <label>Upload or Capture Image</label>
-          <div class="image-action-buttons" style="display:flex; gap:12px; margin-bottom:12px;">
-            <button type="button" class="btn-cancel" id="btnCameraImage" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px;">📷 Take Photo</button>
-            <button type="button" class="btn-cancel" id="btnUploadImage" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px;">📁 Upload File</button>
-          </div>
+          <button type="button" class="btn-cancel" id="btnCameraImage" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:12px; min-height:48px;">📷 Take Photo</button>
+          
           <div class="image-upload-zone" id="imageUploadZone">
-            <div class="image-upload-icon">📥</div>
-            <p>Or drag and drop an image here</p>
+            <input type="file" id="reportImageUpload" accept="image/*">
+            <div class="image-upload-icon">📁</div>
+            <p>Tap to Upload or Drag & Drop here</p>
             <small>JPG, PNG, WEBP — max 5MB</small>
           </div>
-          <input type="file" id="reportImageUpload" accept="image/*" style="display:none">
+          
           <input type="file" id="reportImageCamera" accept="image/*" capture="environment" style="display:none">
           <div id="imagePreviewWrap" style="display:none" class="image-preview-wrap">
             <img id="imagePreview" class="image-preview" src="" alt="Preview">
@@ -433,6 +447,29 @@
   <div class="modal" id="reportModal">
     <button class="modal-close" id="modalClose">✕</button>
     <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- RISK ZONE SAVE MODAL -->
+<div class="modal-overlay" id="zoneModalOverlay">
+  <div class="modal" id="zoneModal">
+    <div class="modal-body">
+      <h3 style="margin-bottom:16px">Save Risk Zone</h3>
+      <div class="form-group" style="margin-top:10px;"><label>Zone Name *</label><input type="text" id="zoneName" placeholder="e.g. Marulas Creek Buffer"></div>
+      <div class="form-group" style="margin-top:14px;"><label>Risk Level *</label>
+        <div class="severity-picker" id="zoneSeverityPicker">
+          <button type="button" class="sev-btn sev-low" data-value="low">🟡 Low</button>
+          <button type="button" class="sev-btn sev-medium" data-value="medium">🟠 Medium</button>
+          <button type="button" class="sev-btn sev-high" data-value="high">🔴 High</button>
+          <button type="button" class="sev-btn sev-critical" data-value="critical">🆘 Critical</button>
+        </div><input type="hidden" id="zoneSeverity">
+      </div>
+      <div class="form-group" style="margin-top:14px;"><label>Description</label><textarea id="zoneDesc" rows="2" placeholder="Brief description of the risk..."></textarea></div>
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn-cancel" id="zoneCancelBtn">Cancel</button>
+        <button class="btn-submit" id="zoneSaveBtn">Save Zone</button>
+      </div>
+    </div>
   </div>
 </div>
 
