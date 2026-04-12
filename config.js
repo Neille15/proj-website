@@ -24,17 +24,21 @@ const APP_CONFIG = {
   fullName:   'Barangay Hazard & Alert Lifeline App',
   barangay:   'Brgy. Marulas',
   city:       'Valenzuela City',
-  version:    '2.0.0',
+  version:    '2.1.0',
 
   // Auto-delete resolved reports after this many hours
   resolvedDeleteAfterHours: 24,
 
-  // Admin credentials (for demo — in production use Supabase Auth roles)
+  // Fallback admin email list (used if Supabase metadata role is not set).
+  // For production: use Supabase metadata instead (see SQL schema below).
   adminUsers: ['admin@marulas.gov.ph', 'bdrrmc@marulas.gov.ph', 'captain@marulas.gov.ph'],
 
   // Brgy. Marulas center coordinates
   mapCenter: { lat: 14.6739, lng: 120.9858 },
   mapZoom: 15,
+
+  // Hazard zones — add polygon coordinates here when available
+  hazardZones: [],
 
   // Flood-prone zones in Brgy. Marulas (approximate)
   /*
@@ -81,23 +85,27 @@ const APP_CONFIG = {
    SUPABASE SQL SCHEMA
    Run this in your Supabase SQL Editor to set up the database:
 
-   -- Reports table
-   CREATE TABLE reports (
-     id          TEXT PRIMARY KEY DEFAULT 'RPT-' || gen_random_uuid()::text,
-     title       TEXT NOT NULL,
-     type        TEXT NOT NULL,
-     severity    TEXT NOT NULL CHECK (severity IN ('low','medium','high','critical')),
-     barangay    TEXT NOT NULL,
-     street      TEXT NOT NULL,
-     description TEXT,
+   -- Reports table (run once to create)
+   CREATE TABLE IF NOT EXISTS reports (
+     id               TEXT PRIMARY KEY DEFAULT 'RPT-' || gen_random_uuid()::text,
+     title            TEXT NOT NULL,
+     type             TEXT NOT NULL,
+     severity         TEXT NOT NULL CHECK (severity IN ('low','medium','high','critical')),
+     barangay         TEXT NOT NULL,
+     street           TEXT NOT NULL,
+     description      TEXT,
      reporter_name    TEXT,
      reporter_contact TEXT,
-     anonymous   BOOLEAN DEFAULT FALSE,
-     status      TEXT DEFAULT 'pending' CHECK (status IN ('pending','responding','resolved')),
-     resolved_at TIMESTAMPTZ,
-     created_at  TIMESTAMPTZ DEFAULT now(),
-     updated_at  TIMESTAMPTZ DEFAULT now()
+     anonymous        BOOLEAN DEFAULT FALSE,
+     image_url        TEXT,
+     status           TEXT DEFAULT 'pending' CHECK (status IN ('pending','responding','resolved')),
+     resolved_at      TIMESTAMPTZ,
+     created_at       TIMESTAMPTZ DEFAULT now(),
+     updated_at       TIMESTAMPTZ DEFAULT now()
    );
+
+   -- Add image_url column if upgrading from v1 schema
+   ALTER TABLE reports ADD COLUMN IF NOT EXISTS image_url TEXT;
 
    -- Enable Row Level Security
    ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
@@ -127,6 +135,35 @@ const APP_CONFIG = {
 
    -- Enable real-time on reports table
    ALTER PUBLICATION supabase_realtime ADD TABLE reports;
+
+   -- ============================================================
+   -- SUPABASE STORAGE — Report Images
+   -- Run in SQL Editor to create the storage bucket:
+   -- ============================================================
+   INSERT INTO storage.buckets (id, name, public)
+   VALUES ('report-images', 'report-images', true)
+   ON CONFLICT DO NOTHING;
+
+   -- Allow authenticated users to upload images
+   CREATE POLICY "Auth users can upload report images"
+     ON storage.objects FOR INSERT
+     WITH CHECK (bucket_id = 'report-images' AND auth.role() = 'authenticated');
+
+   -- Allow anyone to view report images
+   CREATE POLICY "Anyone can view report images"
+     ON storage.objects FOR SELECT
+     USING (bucket_id = 'report-images');
+
+   -- ============================================================
+   -- SECURE ADMIN ROLES via Supabase User Metadata
+   -- Run this after creating admin accounts to assign secure roles:
+   -- ============================================================
+   UPDATE auth.users
+   SET raw_user_meta_data = raw_user_meta_data || '{"role":"admin"}'
+   WHERE email IN ('admin@marulas.gov.ph', 'bdrrmc@marulas.gov.ph', 'captain@marulas.gov.ph');
+
+   -- To assign admin role to a NEW user:
+   -- UPDATE auth.users SET raw_user_meta_data = raw_user_meta_data || '{"role":"admin"}' WHERE email = 'newadmin@marulas.gov.ph';
 
    ============================================================ */
 

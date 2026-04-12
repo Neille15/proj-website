@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BaHALA Lite — Brgy. Marulas Flood Warning</title>
+<meta name="description" content="BaHALA Lite — Low bandwidth version of the Marulas Flood Warning System.">
+<style>
+/* ============================================================
+   BaHALA Lite — Minimal CSS, no external fonts/assets
+   Optimized for 2G/3G connections
+   ============================================================ */
+:root {
+  --blue:  #005F99;
+  --red:   #D62828;
+  --amber: #92400E;
+  --green: #14532D;
+  --gray:  #334155;
+  --light: #F1F5F9;
+  --white: #FFFFFF;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#0F172A;font-size:15px;line-height:1.5}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.header{background:var(--blue);color:white;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-weight:700;font-size:1.1rem;letter-spacing:-0.3px}
+.logo span{font-size:0.6rem;opacity:0.7;display:block;font-weight:400}
+.lite-tag{background:rgba(255,255,255,0.2);padding:3px 8px;border-radius:4px;font-size:0.62rem;font-weight:700;letter-spacing:0.5px}
+.back-full{color:white;font-size:0.75rem;opacity:0.85}
+.sos{position:fixed;bottom:16px;right:14px;background:var(--red);color:white;padding:12px 16px;border-radius:50px;font-weight:700;font-size:0.85rem;box-shadow:0 4px 14px rgba(214,40,40,0.4)}
+.container{max-width:680px;margin:0 auto;padding:16px}
+.section{background:white;border:1px solid #E2E8F0;border-radius:8px;margin-bottom:14px;overflow:hidden}
+.section-head{background:var(--light);padding:10px 14px;font-weight:700;font-size:0.82rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.3px;border-bottom:1px solid #E2E8F0}
+.section-body{padding:14px}
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:none}
+.stat{text-align:center;padding:14px 8px;border-right:1px solid #E2E8F0}
+.stat:last-child{border-right:none}
+.stat-num{display:block;font-size:1.6rem;font-weight:700;line-height:1;margin-bottom:3px}
+.stat-label{font-size:0.62rem;color:var(--gray);text-transform:uppercase}
+.stat-red{color:var(--red)}
+.stat-amber{color:#D97706}
+.stat-green{color:#16A34A}
+/* Reports */
+.report-item{padding:12px 0;border-bottom:1px solid #F1F5F9;display:flex;gap:10px;align-items:flex-start}
+.report-item:last-child{border-bottom:none}
+.sev-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.sev-dot.low{background:#F59E0B}
+.sev-dot.medium{background:#F97316}
+.sev-dot.high{background:var(--red)}
+.sev-dot.critical{background:#7C0000}
+.r-title{font-weight:600;font-size:0.9rem;margin-bottom:2px}
+.r-meta{font-size:0.75rem;color:#64748B}
+.badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:0.65rem;font-weight:600;margin-left:4px}
+.badge-pending{background:#FFFBEB;color:#92400E}
+.badge-responding{background:#E0F3FF;color:#005F99}
+.badge-resolved{background:#F0FDF4;color:#14532D}
+/* Report Form */
+.form-group{margin-bottom:12px}
+label{display:block;font-size:0.75rem;font-weight:700;color:#334155;margin-bottom:5px;text-transform:uppercase}
+input,textarea,select{width:100%;padding:10px;border:1.5px solid #CBD5E1;border-radius:6px;font-size:0.9rem;font-family:inherit;background:#F8FAFC}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue)}
+textarea{resize:vertical;min-height:80px}
+.sev-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px}
+.sev-btn{padding:8px;border:1.5px solid #CBD5E1;border-radius:6px;background:white;font-size:0.78rem;font-weight:600;cursor:pointer;text-align:center}
+.sev-btn.sel-low{background:#FFFBEB;border-color:#F59E0B;color:#92400E}
+.sev-btn.sel-medium{background:#FFF7ED;border-color:#F97316;color:#7C2D12}
+.sev-btn.sel-high{background:#FFF0F0;border-color:#D62828;color:#D62828}
+.sev-btn.sel-critical{background:#FFF0F0;border-color:#7C0000;color:#7C0000}
+.submit-btn{width:100%;padding:13px;background:var(--blue);color:white;border:none;border-radius:6px;font-size:0.95rem;font-weight:700;cursor:pointer;margin-top:8px}
+.submit-btn:hover{background:#003F66}
+.submit-btn:disabled{opacity:0.6;cursor:not-allowed}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:0.88rem;margin-top:4px}
+/* Contacts */
+.contact-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F1F5F9;font-size:0.88rem}
+.contact-row:last-child{border-bottom:none}
+.call-btn{background:var(--blue);color:white;padding:6px 12px;border-radius:4px;font-size:0.78rem;font-weight:600;white-space:nowrap}
+/* Signals */
+.signal-row{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #F1F5F9;font-size:0.82rem}
+.signal-row:last-child{border-bottom:none}
+.signal-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:3px}
+/* Toast */
+.toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(16px);background:#0F172A;color:white;padding:10px 18px;border-radius:6px;font-size:0.82rem;opacity:0;pointer-events:none;transition:all 0.3s;z-index:9999;max-width:88vw;text-align:center;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{text-align:center;padding:24px;color:#64748B;font-size:0.85rem}
+.full-mode-banner{background:#E0F3FF;border:1px solid rgba(0,95,153,0.2);padding:10px 14px;font-size:0.8rem;color:var(--blue);border-radius:8px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.full-mode-banner a{font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    BaHALA <span>Brgy. Marulas Flood Warning</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="lite-tag">⚡ LITE</span>
+    <a href="index.html" class="back-full">Full Site</a>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Full site prompt -->
+  <div class="full-mode-banner">
+    📶 You're on Lite Mode — minimal data usage.
+    <a href="index.html" style="margin-left:auto;white-space:nowrap">Go Full Site →</a>
+  </div>
+
+  <!-- Stats -->
+  <div class="section">
+    <div class="section-head">📊 Live Statistics</div>
+    <div class="stats">
+      <div class="stat"><span class="stat-num" id="lTotal">—</span><span class="stat-label">Total</span></div>
+      <div class="stat"><span class="stat-num stat-red" id="lCritical">—</span><span class="stat-label">Critical</span></div>
+      <div class="stat"><span class="stat-num stat-amber" id="lPending">—</span><span class="stat-label">Pending</span></div>
+      <div class="stat"><span class="stat-num stat-green" id="lResolved">—</span><span class="stat-label">Resolved</span></div>
+    </div>
+  </div>
+
+  <!-- Active Reports -->
+  <div class="section">
+    <div class="section-head">📋 Active Reports</div>
+    <div class="section-body" id="liteReportsList">
+      <div class="empty">Loading reports…</div>
+    </div>
+  </div>
+
+  <!-- Submit Report Form -->
+  <div class="section">
+    <div class="section-head">📌 Submit a Report</div>
+    <div class="section-body">
+      <div class="form-group">
+        <label>Title *</label>
+        <input type="text" id="lTitle" placeholder="e.g. Flooded road near Barangay Hall" maxlength="100">
+      </div>
+      <div class="form-group">
+        <label>Incident Type *</label>
+        <select id="lType">
+          <option value="">Select type...</option>
+          <option value="road-flooding">Road Flooding</option>
+          <option value="house-flooding">House Flooding</option>
+          <option value="blocked-drainage">Blocked Drainage</option>
+          <option value="rising-water-level">Rising Water Level</option>
+          <option value="landslide">Landslide / Erosion</option>
+          <option value="structural-damage">Structural Damage</option>
+          <option value="evacuation-needed">Evacuation Needed</option>
+          <option value="other">Other Hazard</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Severity *</label>
+        <input type="hidden" id="lSeverity">
+        <div class="sev-btns">
+          <button type="button" class="sev-btn" data-sev="low" onclick="pickSev(this)">🟡 Low</button>
+          <button type="button" class="sev-btn" data-sev="medium" onclick="pickSev(this)">🟠 Medium</button>
+          <button type="button" class="sev-btn" data-sev="high" onclick="pickSev(this)">🔴 High</button>
+          <button type="button" class="sev-btn" data-sev="critical" onclick="pickSev(this)">🆘 Critical</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Street / Landmark *</label>
+        <input type="text" id="lStreet" placeholder="e.g. Marulas Road, near Purok 3">
+      </div>
+      <div class="form-group">
+        <label>Description *</label>
+        <textarea id="lDesc" placeholder="Describe the situation..." maxlength="600"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Your Name *</label>
+        <input type="text" id="lName" placeholder="Full name">
+      </div>
+      <div class="form-group">
+        <label>Contact Number</label>
+        <input type="tel" id="lContact" placeholder="09XX-XXX-XXXX">
+      </div>
+      <div class="form-group">
+        <div class="checkbox-row">
+          <input type="checkbox" id="lAnon" style="width:auto">
+          <label for="lAnon" style="text-transform:none;font-weight:400;margin-bottom:0">Submit anonymously</label>
+        </div>
+      </div>
+      <button class="submit-btn" id="lSubmitBtn" onclick="submitLiteReport()">✓ Submit Report</button>
+      <div id="lFormMsg" style="margin-top:10px;font-size:0.82rem;color:var(--green);display:none"></div>
+    </div>
+  </div>
+
+  <!-- Flood Signal Guide -->
+  <div class="section">
+    <div class="section-head">🚦 Flood Signal Guide</div>
+    <div class="section-body">
+      <div class="signal-row">
+        <div class="signal-dot" style="background:#FBBF24"></div>
+        <div><strong>Yellow — Advisory:</strong> Water rising. Be alert. Prepare emergency kits.</div>
+      </div>
+      <div class="signal-row">
+        <div class="signal-dot" style="background:#F97316"></div>
+        <div><strong>Orange — Warning:</strong> Flooding imminent. Ready to evacuate on notice.</div>
+      </div>
+      <div class="signal-row">
+        <div class="signal-dot" style="background:#D62828"></div>
+        <div><strong>Red — Danger:</strong> Evacuate now to Marulas Elementary School.</div>
+      </div>
+      <div class="signal-row">
+        <div class="signal-dot" style="background:#1E293B"></div>
+        <div><strong>Black — Extreme:</strong> Life-threatening. Stay on highest floor. Call 911.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Emergency Contacts -->
+  <div class="section">
+    <div class="section-head">🚨 Emergency Contacts</div>
+    <div class="section-body">
+      <div class="contact-row">
+        <div><strong>Emergency Hotline</strong><br><span style="color:#64748B;font-size:0.78rem">All emergencies</span></div>
+        <a href="tel:911" class="call-btn" style="background:#D62828">📞 911</a>
+      </div>
+      <div class="contact-row">
+        <div><strong>Valenzuela DRRMO</strong><br><span style="color:#64748B;font-size:0.78rem">02-8292-8700</span></div>
+        <a href="tel:028292870" class="call-btn">📞 Call</a>
+      </div>
+      <div class="contact-row">
+        <div><strong>DRRMO Mobile</strong><br><span style="color:#64748B;font-size:0.78rem">0917-829-7119</span></div>
+        <a href="tel:09178297119" class="call-btn">📞 Call</a>
+      </div>
+      <div class="contact-row">
+        <div><strong>Brgy. Captain</strong><br><span style="color:#64748B;font-size:0.78rem">09171234567</span></div>
+        <a href="tel:09171234567" class="call-btn">📞 Call</a>
+      </div>
+      <div class="contact-row">
+        <div><strong>BDRRMC Head</strong><br><span style="color:#64748B;font-size:0.78rem">09281234567</span></div>
+        <a href="tel:09281234567" class="call-btn">📞 Call</a>
+      </div>
+      <div class="contact-row">
+        <div><strong>Evacuation Center</strong><br><span style="color:#64748B;font-size:0.78rem">Marulas Elementary</span></div>
+        <a href="tel:09391234567" class="call-btn">📞 Call</a>
+      </div>
+      <div class="contact-row">
+        <div><strong>Philippine Red Cross</strong><br><span style="color:#64748B;font-size:0.78rem">143</span></div>
+        <a href="tel:143" class="call-btn">📞 Call</a>
+      </div>
+      <div class="contact-row">
+        <div><strong>PAGASA</strong><br><span style="color:#64748B;font-size:0.78rem">02-8284-0800</span></div>
+        <a href="tel:028284080" class="call-btn">📞 Call</a>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;font-size:0.72rem;color:#94A3B8;padding-bottom:80px">
+    BaHALA Lite v2 · Brgy. Marulas, Valenzuela City · <a href="index.html">Full version →</a>
+  </p>
+</div>
+
+<!-- SOS FAB -->
+<a href="tel:911" class="sos">🚨 SOS 911</a>
+
+<!-- Toast -->
+<div class="toast" id="liteToast"></div>
+
+<script>
+'use strict';
+
+/* ---- Config refs ---- */
+const LITE_LOCAL_KEY = 'bahala_reports_v3';
+const LITE_SEED_KEY  = 'bahala_seeded_v3';
+
+let supabase = null;
+let isOnline = false;
+
+function showLiteToast(msg, dur = 3500) {
+  const t = document.getElementById('liteToast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60)    return 'Just now';
+  if (diff < 3600)  return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return d.toLocaleDateString('en-PH', { month:'short', day:'numeric' });
+}
+
+async function initLite() {
+  // Try to load config and database from parent scripts
+  // Since lite.html is standalone, use localStorage or Supabase directly
+  const config = getConfig();
+
+  if (config && config.url && !config.url.includes('YOUR_PROJECT_ID')) {
+    try {
+      const sdk = document.createElement('script');
+      sdk.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+      sdk.onload = async () => {
+        supabase = window.supabase.createClient(config.url, config.anonKey);
+        isOnline = true;
+        await loadLiteData();
+      };
+      sdk.onerror = async () => { await loadLiteData(); };
+      document.head.appendChild(sdk);
+    } catch(e) {
+      await loadLiteData();
+    }
+  } else {
+    await loadLiteData();
+  }
+}
+
+function getConfig() {
+  // Try to load config.js values if available in same origin
+  if (typeof SUPABASE_CONFIG !== 'undefined') return SUPABASE_CONFIG;
+  return null;
+}
+
+async function loadLiteData() {
+  try {
+    let reports = [];
+    if (isOnline && supabase) {
+      const { data } = await supabase
+        .from('reports').select('id,title,type,severity,street,barangay,status,created_at')
+        .order('created_at', { ascending: false }).limit(30);
+      reports = data || [];
+    } else {
+      reports = JSON.parse(localStorage.getItem(LITE_LOCAL_KEY) || '[]');
+    }
+
+    // Stats
+    document.getElementById('lTotal').textContent    = reports.length;
+    document.getElementById('lCritical').textContent = reports.filter(r => r.severity === 'critical').length;
+    document.getElementById('lPending').textContent  = reports.filter(r => r.status === 'pending').length;
+    document.getElementById('lResolved').textContent = reports.filter(r => r.status === 'resolved').length;
+
+    // Reports list (active only)
+    const active = reports.filter(r => r.status !== 'resolved').slice(0, 20);
+    const list = document.getElementById('liteReportsList');
+    if (active.length === 0) {
+      list.innerHTML = '<div class="empty">No active incidents.</div>';
+    } else {
+      list.innerHTML = active.map(r => `
+        <div class="report-item">
+          <div class="sev-dot ${r.severity}"></div>
+          <div>
+            <div class="r-title">${r.title}</div>
+            <div class="r-meta">${r.street || r.barangay || ''} · ${formatDate(r.created_at || r.date)}
+              <span class="badge badge-${r.status}">${r.status}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch(e) {
+    document.getElementById('liteReportsList').innerHTML = '<div class="empty">Could not load reports.</div>';
+  }
+}
+
+/* Severity picker */
+function pickSev(btn) {
+  document.querySelectorAll('.sev-btn').forEach(b => {
+    b.className = 'sev-btn';
+  });
+  const sev = btn.dataset.sev;
+  btn.classList.add('sel-' + sev);
+  document.getElementById('lSeverity').value = sev;
+}
+
+/* Submit report */
+async function submitLiteReport() {
+  const title   = document.getElementById('lTitle').value.trim();
+  const type    = document.getElementById('lType').value;
+  const sev     = document.getElementById('lSeverity').value;
+  const street  = document.getElementById('lStreet').value.trim();
+  const desc    = document.getElementById('lDesc').value.trim();
+  const name    = document.getElementById('lName').value.trim();
+  const contact = document.getElementById('lContact').value.trim();
+  const anon    = document.getElementById('lAnon').checked;
+
+  if (!title || !type || !sev || !street || !desc || !name) {
+    showLiteToast('⚠️ Please fill in all required fields.');
+    return;
+  }
+
+  const btn = document.getElementById('lSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  const payload = {
+    title, type, severity: sev, street, description: desc,
+    reporter_name: anon ? 'Anonymous' : name,
+    reporter_contact: contact,
+    anonymous: anon,
+    barangay: 'Brgy. Marulas',
+    status: 'pending',
+  };
+
+  try {
+    if (isOnline && supabase) {
+      const { error } = await supabase.from('reports').insert(payload);
+      if (error) throw error;
+    } else {
+      // localStorage fallback
+      const all  = JSON.parse(localStorage.getItem(LITE_LOCAL_KEY) || '[]');
+      const id   = 'RPT-' + Date.now().toString(36).toUpperCase();
+      all.unshift({ id, ...payload, date: new Date().toISOString() });
+      localStorage.setItem(LITE_LOCAL_KEY, JSON.stringify(all));
+    }
+
+    const msg = document.getElementById('lFormMsg');
+    msg.style.display = 'block';
+    msg.style.color = '#14532D';
+    msg.textContent = '✓ Report submitted successfully!';
+    showLiteToast('✅ Report submitted!');
+
+    // Clear form
+    ['lTitle','lType','lStreet','lDesc','lName','lContact'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('lSeverity').value = '';
+    document.getElementById('lAnon').checked = false;
+    document.querySelectorAll('.sev-btn').forEach(b => b.className = 'sev-btn');
+
+    await loadLiteData();
+  } catch(e) {
+    showLiteToast('❌ Submission failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✓ Submit Report';
+  }
+}
+
+// Boot
+window.addEventListener('DOMContentLoaded', initLite);
+</script>
+
+<!-- Load config.js for Supabase credentials if available -->
+<script src="config.js" onerror="console.warn('Config not loaded in lite mode')"></script>
+
+</body>
+</html>

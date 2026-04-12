@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BaHALA — Brgy. Marulas Flood Early Warning System</title>
+<meta name="description" content="BaHALA — Community-powered flood warning and reporting system for Barangay Marulas, Valenzuela City.">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="styles.css">
@@ -40,11 +41,12 @@
     <div class="header-right">
       <div class="db-indicator" id="dbIndicator"><span class="db-dot"></span><span class="db-label">Local DB</span></div>
       <div id="userMenu" class="user-menu" style="display:none">
-        <button class="user-avatar" id="userAvatar" id="userAvatarBtn">U</button>
+        <button class="user-avatar" id="userAvatar">U</button>
         <div class="user-dropdown" id="userDropdown" style="display:none">
           <div class="user-name" id="userNameDisplay">User</div>
           <div class="user-role-display" id="userRoleDisplay">Resident</div>
-          <hr>
+          <hr style="margin:8px 0;border-color:var(--gray-100)">
+          <button class="dropdown-item" id="profileBtn">👤 My Profile</button>
           <button class="dropdown-item" id="logoutBtn">🚪 Sign Out</button>
         </div>
       </div>
@@ -53,6 +55,10 @@
       <button class="mobile-menu-btn" id="mobileMenuBtn"><span></span><span></span><span></span></button>
     </div>
   </div>
+
+  <!-- Verification / Lite mode banners rendered here by JS -->
+  <div id="headerBanners"></div>
+
   <div class="mobile-nav" id="mobileNav">
     <a class="mobile-nav-link" data-page="home">🏠 Home</a>
     <a class="mobile-nav-link" data-page="map">🗺️ Hazard Map</a>
@@ -60,6 +66,7 @@
     <a class="mobile-nav-link" data-page="view">📊 View Reports</a>
     <a class="mobile-nav-link" data-page="contacts">🚨 Emergency</a>
     <a class="mobile-nav-link" id="mobileLoginLink" data-page="login">🔐 Sign In / Register</a>
+    <a class="mobile-nav-link" href="lite.html">⚡ Lite Mode (Low Bandwidth)</a>
   </div>
 </header>
 
@@ -80,6 +87,7 @@
         <button class="auth-tab active" data-tab="signin">Sign In</button>
         <button class="auth-tab" data-tab="signup">Register</button>
       </div>
+      <!-- Sign In Form -->
       <div class="auth-form" id="signinForm">
         <div class="demo-creds">
           <strong>Demo Credentials</strong><br>
@@ -91,10 +99,21 @@
         <button class="btn-auth" id="signInBtn">Sign In →</button>
         <button class="btn-guest" data-page="home">Continue as Guest (View Only)</button>
       </div>
+      <!-- Sign Up Form -->
       <div class="auth-form" id="signupForm" style="display:none">
         <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Juan dela Cruz"></div>
         <div class="form-group"><label>Email Address</label><input type="email" id="regEmail" placeholder="your@email.com"></div>
-        <div class="form-group"><label>Password</label><input type="password" id="regPassword" placeholder="Min. 8 characters"></div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="regPassword" placeholder="Min. 8 characters">
+          <div class="pw-strength" id="pwStrengthBars">
+            <div class="pw-strength-bar" id="pwBar1"></div>
+            <div class="pw-strength-bar" id="pwBar2"></div>
+            <div class="pw-strength-bar" id="pwBar3"></div>
+            <div class="pw-strength-bar" id="pwBar4"></div>
+          </div>
+          <div class="pw-strength-label" id="pwStrengthLabel"></div>
+        </div>
         <button class="btn-auth" id="signUpBtn">Create Account →</button>
         <p class="auth-note">Admin accounts are assigned by the Barangay office only.</p>
       </div>
@@ -155,7 +174,7 @@
   <section class="news-section">
     <div class="container">
       <div class="section-header">
-        <h2>Brgy. Marulas — Flood Plans & Activities</h2>
+        <h2>Brgy. Marulas — Flood Plans &amp; Activities</h2>
         <span class="section-badge">Valenzuela City DRRMC</span>
       </div>
       <div class="news-grid">
@@ -183,7 +202,7 @@
 
         <article class="news-card">
           <div class="news-tag news-tag-activity">🚒 Training</div>
-          <h3>BDRRMC Water Rescue & Life Support Training</h3>
+          <h3>BDRRMC Water Rescue &amp; Life Support Training</h3>
           <p>Brgy. Marulas BDRRMC conducted a 2-day Water Rescue and Basic Life Support training for 35 barangay tanod and VAWC members in partnership with the Philippine Red Cross Valenzuela Chapter. Training covered swift water rescue, CPR, and evacuation protocols for flood scenarios.</p>
           <div class="news-footer"><span class="news-source">🏥 Philippine Red Cross — Valenzuela</span><span class="news-date">September 2024</span></div>
         </article>
@@ -224,7 +243,7 @@
     <div class="container">
       <div class="page-header-inner">
         <button class="back-btn" data-page="home">← Back</button>
-        <div><h1>🗺️ Hazard Map</h1><p>Flood risk zones & live incident markers — Brgy. Marulas, Valenzuela City</p></div>
+        <div><h1>🗺️ Hazard Map</h1><p>Flood risk zones &amp; live incident markers — Brgy. Marulas, Valenzuela City</p></div>
       </div>
     </div>
   </div>
@@ -277,6 +296,7 @@
   </div>
   <div class="container form-container">
     <div class="form-card" id="reportFormCard">
+      <!-- Step 1: Incident Details -->
       <div class="form-section-title"><div class="form-step">1</div><h3>Incident Details</h3></div>
       <div class="form-grid">
         <div class="form-group full-width"><label>Report Title *</label><input type="text" id="reportTitle" placeholder="e.g. Flooded road near Barangay Hall" maxlength="100"><span class="char-count" id="titleCount">0/100</span></div>
@@ -285,12 +305,36 @@
         <div class="form-group full-width"><label>Street / Landmark *</label><input type="text" id="reportStreet" placeholder="e.g. Marulas Road near Purok 3 basketball court"></div>
         <div class="form-group full-width"><label>Description *</label><textarea id="reportDescription" rows="4" placeholder="Describe the situation. Include water level, number of families affected, and any immediate dangers..." maxlength="600"></textarea><span class="char-count" id="descCount">0/600</span></div>
       </div>
+
+      <!-- Step 2: Reporter Info -->
       <div class="form-section-title" style="margin-top:2rem"><div class="form-step">2</div><h3>Reporter Information</h3></div>
       <div class="form-grid">
         <div class="form-group"><label>Your Name *</label><input type="text" id="reporterName" placeholder="Full name"></div>
-        <div class="form-group"><label>Contact Number *</label><input type="tel" id="reporterContact" placeholder="09XX-XXX-XXXX"></div>
+        <div class="form-group"><label>Contact Number</label><input type="tel" id="reporterContact" placeholder="09XX-XXX-XXXX"></div>
         <div class="form-group full-width"><label class="checkbox-label"><input type="checkbox" id="reportAnonymous"><span class="checkmark"></span>Submit anonymously (your name will not be shown publicly)</label></div>
       </div>
+
+      <!-- Step 3: Photo Evidence -->
+      <div class="form-section-title" style="margin-top:2rem"><div class="form-step">3</div><h3>Photo Evidence <span style="font-weight:400;color:var(--gray-500);font-size:0.82rem">(Optional)</span></h3></div>
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label>Upload or Capture Image</label>
+          <div class="image-upload-zone" id="imageUploadZone">
+            <input type="file" id="reportImage" accept="image/*" capture="environment">
+            <div class="image-upload-icon">📷</div>
+            <p>Tap to upload or take a photo</p>
+            <small>JPG, PNG, WEBP — max 5MB</small>
+          </div>
+          <div id="imagePreviewWrap" style="display:none" class="image-preview-wrap">
+            <img id="imagePreview" class="image-preview" src="" alt="Preview">
+            <button class="image-preview-remove" id="removeImageBtn" title="Remove image">✕</button>
+          </div>
+          <div class="upload-progress" id="uploadProgressWrap" style="display:none">
+            <div class="upload-progress-bar" id="uploadProgressBar"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button class="btn-cancel" data-page="home">Cancel</button>
         <button class="btn-submit" id="submitReportBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Submit Report</button>
@@ -318,16 +362,19 @@
       </div>
     </div>
   </div>
-  <div class="container">
+  <div class="container" style="padding-top:16px;padding-bottom:60px">
     <div class="resolve-notice" id="resolveNotice" style="display:none">⏱️ <strong>Auto-delete active:</strong> Resolved reports are automatically removed after 24 hours.</div>
     <div class="filter-bar">
-      <div class="filter-group"><label>Severity</label><div class="filter-chips" id="severityFilter"><button class="chip active" data-filter="all">All</button><button class="chip chip-low" data-filter="low">Low</button><button class="chip chip-medium" data-filter="medium">Medium</button><button class="chip chip-high" data-filter="high">High</button><button class="chip chip-critical" data-filter="critical">Critical</button></div></div>
-      <div class="filter-group"><label>Status</label><div class="filter-chips" id="statusFilter"><button class="chip active" data-filter="all">All</button><button class="chip" data-filter="pending">Pending</button><button class="chip" data-filter="responding">Responding</button><button class="chip" data-filter="resolved">Resolved</button></div></div>
-      <div class="filter-search"><input type="text" id="searchReports" placeholder="🔍 Search reports..."></div>
-      <button class="btn-refresh" id="refreshBtn">↻ Refresh</button>
+      <div class="filter-group"><label>Severity</label><div class="filter-chips" id="severityFilter"><button class="chip active" data-filter="all">All</button><button class="chip chip-low" data-filter="low">🟡 Low</button><button class="chip chip-medium" data-filter="medium">🟠 Medium</button><button class="chip chip-high" data-filter="high">🔴 High</button><button class="chip chip-critical" data-filter="critical">🆘 Critical</button></div></div>
+      <div class="filter-group"><label>Status</label><div class="filter-chips" id="statusFilter"><button class="chip active" data-filter="all">All</button><button class="chip" data-filter="pending">⏳ Pending</button><button class="chip" data-filter="responding">🔵 Responding</button><button class="chip" data-filter="resolved">✅ Resolved</button></div></div>
+      <div class="filter-search"><input type="text" id="searchReports" placeholder="🔍 Search title, location, type…"></div>
+      <div class="filter-actions">
+        <span class="filter-count" id="filterResultCount" style="display:none"></span>
+        <button class="btn-clear-filters" id="clearFiltersBtn" style="display:none">✕ Clear</button>
+        <button class="btn-refresh" id="refreshBtn">↻ Refresh</button>
+      </div>
     </div>
     <div class="reports-table-wrap" id="reportsTableWrap"><table class="reports-table"><thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Location</th><th>Severity</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead><tbody id="reportsTableBody"></tbody></table></div>
-    <div class="reports-cards" id="reportsCards"></div>
     <div class="empty-state" id="emptyState" style="display:none"><div class="empty-icon">📋</div><h3>No reports found</h3><p>Try adjusting your filters or submit a new report.</p><button class="btn-submit" data-page="report">Submit First Report</button></div>
   </div>
 </main>
@@ -335,18 +382,18 @@
 <!-- ============================================================ PAGE: EMERGENCY CONTACTS ============================================================ -->
 <main id="page-contacts" class="page">
   <div class="page-header page-header-red">
-    <div class="container"><div class="page-header-inner"><button class="back-btn" data-page="home">← Back</button><div><h1>🚨 Emergency Contacts</h1><p>Valenzuela City & Brgy. Marulas emergency responders</p></div></div></div>
+    <div class="container"><div class="page-header-inner"><button class="back-btn" data-page="home">← Back</button><div><h1>🚨 Emergency Contacts</h1><p>Valenzuela City &amp; Brgy. Marulas emergency responders</p></div></div></div>
   </div>
   <div class="container contacts-container">
     <div class="emergency-banner"><span>⚠️</span><div><strong>In immediate danger?</strong><p>Call 911 or the Valenzuela DRRMO hotline immediately. Do not wait.</p></div><a href="tel:911" class="emergency-call-btn">CALL 911</a></div>
     <div class="contacts-grid">
-      <div class="contact-card"><div class="contact-icon">🏛️</div><div class="contact-info"><h3>Valenzuela DRRMO</h3><p>City Disaster Risk Reduction & Management Office</p><a href="tel:02-8292-8700" class="contact-number">02-8292-8700</a><a href="tel:0917-8297119" class="contact-number">0917-829-7119</a></div><a href="tel:02-8292-8700" class="contact-call-btn">📞 Call</a></div>
-      <div class="contact-card"><div class="contact-icon">🌦️</div><div class="contact-info"><h3>PAGASA</h3><p>Weather & Flood Forecasting Division</p><a href="tel:02-8284-0800" class="contact-number">02-8284-0800</a></div><a href="tel:02-8284-0800" class="contact-call-btn">📞 Call</a></div>
+      <div class="contact-card"><div class="contact-icon">🏛️</div><div class="contact-info"><h3>Valenzuela DRRMO</h3><p>City Disaster Risk Reduction &amp; Management Office</p><a href="tel:02-8292-8700" class="contact-number">02-8292-8700</a><a href="tel:0917-8297119" class="contact-number">0917-829-7119</a></div><a href="tel:02-8292-8700" class="contact-call-btn">📞 Call</a></div>
+      <div class="contact-card"><div class="contact-icon">🌦️</div><div class="contact-info"><h3>PAGASA</h3><p>Weather &amp; Flood Forecasting Division</p><a href="tel:02-8284-0800" class="contact-number">02-8284-0800</a></div><a href="tel:02-8284-0800" class="contact-call-btn">📞 Call</a></div>
       <div class="contact-card"><div class="contact-icon">🚒</div><div class="contact-info"><h3>Valenzuela Fire Station</h3><p>Bureau of Fire Protection — Valenzuela City</p><a href="tel:02-8292-0000" class="contact-number">02-8292-0000</a><a href="tel:160" class="contact-number">160</a></div><a href="tel:02-8292-0000" class="contact-call-btn">📞 Call</a></div>
       <div class="contact-card"><div class="contact-icon">👮</div><div class="contact-info"><h3>Valenzuela PNP</h3><p>Police Station — Valenzuela City</p><a href="tel:02-8292-1161" class="contact-number">02-8292-1161</a><a href="tel:117" class="contact-number">117</a></div><a href="tel:02-8292-1161" class="contact-call-btn">📞 Call</a></div>
       <div class="contact-card"><div class="contact-icon">🏥</div><div class="contact-info"><h3>Valenzuela Medical Center</h3><p>Emergency medical assistance</p><a href="tel:02-8291-5841" class="contact-number">02-8291-5841</a></div><a href="tel:02-8291-5841" class="contact-call-btn">📞 Call</a></div>
       <div class="contact-card"><div class="contact-icon">🏥</div><div class="contact-info"><h3>Philippine Red Cross</h3><p>Rescue, relief and medical aid</p><a href="tel:143" class="contact-number">143</a><a href="tel:02-8527-0000" class="contact-number">02-8527-0000</a></div><a href="tel:143" class="contact-call-btn">📞 Call</a></div>
-      <div class="contact-card"><div class="contact-icon">⚡</div><div class="contact-info"><h3>Meralco Emergency</h3><p>Downed power lines & electrical hazards</p><a href="tel:16211" class="contact-number">16211</a></div><a href="tel:16211" class="contact-call-btn">📞 Call</a></div>
+      <div class="contact-card"><div class="contact-icon">⚡</div><div class="contact-info"><h3>Meralco Emergency</h3><p>Downed power lines &amp; electrical hazards</p><a href="tel:16211" class="contact-number">16211</a></div><a href="tel:16211" class="contact-call-btn">📞 Call</a></div>
       <div class="contact-card"><div class="contact-icon">🏛️</div><div class="contact-info"><h3>NDRRMC Operations</h3><p>National Disaster Risk Reduction Council</p><a href="tel:02-8911-1406" class="contact-number">02-8911-1406</a><a href="tel:911" class="contact-number">911</a></div><a href="tel:911" class="contact-call-btn">📞 Call</a></div>
     </div>
     <div class="section-header" style="margin-top:3rem"><h2>Brgy. Marulas Local Contacts</h2></div>
@@ -354,7 +401,24 @@
       <div class="local-contact"><div class="lc-avatar">BC</div><div class="lc-info"><strong>Barangay Captain</strong><span>Hon. Barangay Captain</span></div><a href="tel:09171234567" class="lc-call">📞 09171234567</a></div>
       <div class="local-contact"><div class="lc-avatar">BD</div><div class="lc-info"><strong>BDRRMC Head</strong><span>Emergency Coordinator</span></div><a href="tel:09281234567" class="lc-call">📞 09281234567</a></div>
       <div class="local-contact"><div class="lc-avatar">EV</div><div class="lc-info"><strong>Evacuation Center</strong><span>Marulas Elementary School</span></div><a href="tel:09391234567" class="lc-call">📞 09391234567</a></div>
-      <div class="local-contact"><div class="lc-avatar">TC</div><div class="lc-info"><strong>Barangay Tanod Chief</strong><span>Peace & Order Desk</span></div><a href="tel:09451234567" class="lc-call">📞 09451234567</a></div>
+      <div class="local-contact"><div class="lc-avatar">TC</div><div class="lc-info"><strong>Barangay Tanod Chief</strong><span>Peace &amp; Order Desk</span></div><a href="tel:09451234567" class="lc-call">📞 09451234567</a></div>
+    </div>
+  </div>
+</main>
+
+<!-- ============================================================ PAGE: PROFILE ============================================================ -->
+<main id="page-profile" class="page">
+  <div class="page-header">
+    <div class="container">
+      <div class="page-header-inner">
+        <button class="back-btn" data-page="home">← Back</button>
+        <div><h1>👤 My Profile</h1><p>Manage your account information and security</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="profile-wrapper">
+    <div class="profile-card" id="profileCard">
+      <!-- Rendered by JS -->
     </div>
   </div>
 </main>
@@ -365,6 +429,12 @@
     <button class="modal-close" id="modalClose">✕</button>
     <div class="modal-body" id="modalBody"></div>
   </div>
+</div>
+
+<!-- IMAGE LIGHTBOX -->
+<div class="img-lightbox" id="imgLightbox">
+  <button class="img-lightbox-close" id="imgLightboxClose">✕</button>
+  <img id="imgLightboxImg" src="" alt="Full image">
 </div>
 
 <!-- FAB -->

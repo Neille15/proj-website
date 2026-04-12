@@ -1,10 +1,14 @@
 /* ============================================================
    app.js — BaHALA v2 Application Logic
-   - Auth (user vs admin roles)
+   - Auth (user vs admin roles) + Profile management
+   - Image capture/upload on report form
+   - Password strength & change password
+   - Email verification toast notification
    - Supabase real-time sync (falls back to localStorage)
    - Interactive Leaflet Hazard Map
    - Auto-delete resolved reports after 24h
    - Admin-only: resolve, delete, status update
+   - Low bandwidth detection → lite mode suggestion
    ============================================================ */
 'use strict';
 
@@ -23,6 +27,8 @@ const App = {
   map: null,
   mapMarkers: [],
   mapZones: [],
+  pendingImageFile: null,
+  pendingImageUrl: null,
 };
 
 // ============================================================
@@ -83,7 +89,6 @@ function navigate(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   App.currentPage = page;
 
-  // Nav link highlight
   $$('[data-page]').forEach(el => {
     if (el.classList.contains('nav-link') || el.classList.contains('mobile-nav-link')) {
       el.classList.toggle('active', el.dataset.page === page);
@@ -93,18 +98,16 @@ function navigate(page) {
   $('#mobileNav').classList.remove('open');
   $('#mobileMenuBtn').classList.remove('open');
 
-  // Page-specific inits
-  if (page === 'home')   initHome();
-  if (page === 'view')   initView();
-  if (page === 'map')    initMap();
-  if (page === 'report') resetForm();
+  if (page === 'home')    initHome();
+  if (page === 'view')    initView();
+  if (page === 'map')     initMap();
+  if (page === 'report')  resetForm();
+  if (page === 'profile') initProfile();
 }
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-page]');
   if (!el) return;
-
-  // Don't navigate if clicking login nav btn and already signed in
   if (el.id === 'loginNavBtn' && App.currentUser) return;
   navigate(el.dataset.page);
 });
@@ -124,7 +127,6 @@ function setUser(user) {
   const name      = user.user_metadata?.full_name || user.email.split('@')[0];
   const initials  = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
-  // Show user menu, hide login btn
   $('#userMenu').style.display    = 'flex';
   $('#loginNavBtn').style.display = 'none';
   $('#mobileLoginLink').style.display = 'none';
@@ -153,6 +155,19 @@ $$('.auth-tab').forEach(tab => {
   });
 });
 
+// Password strength meter on register form
+$('#regPassword').addEventListener('input', function() {
+  const pwd = this.value;
+  const { score, label, cls } = Database.checkPasswordStrength(pwd);
+  const bars = $$('#pwStrengthBars .pw-strength-bar');
+  bars.forEach((bar, i) => {
+    bar.className = 'pw-strength-bar';
+    if (i < score && pwd.length > 0) bar.classList.add(cls);
+  });
+  $('#pwStrengthLabel').textContent = label;
+  $('#pwStrengthLabel').style.color = cls === 'weak' ? '#EF4444' : cls === 'fair' ? '#F59E0B' : '#16A34A';
+});
+
 // Sign In
 $('#signInBtn').addEventListener('click', async () => {
   const email    = $('#loginEmail').value.trim();
@@ -170,18 +185,26 @@ $('#signInBtn').addEventListener('click', async () => {
   }
 });
 
-// Sign Up
+// Sign Up — shows floating toast for email verification
 $('#signUpBtn').addEventListener('click', async () => {
   const name     = $('#regName').value.trim();
   const email    = $('#regEmail').value.trim();
   const password = $('#regPassword').value;
   if (!name || !email || !password) { showToast('⚠️ Fill in all fields.'); return; }
-  if (password.length < 8) { showToast('⚠️ Password must be at least 8 characters.'); return; }
+
+  const { score } = Database.checkPasswordStrength(password);
+  if (score < 2) { showToast('⚠️ Password too weak — add uppercase letters, numbers, or symbols.'); return; }
+
   try {
     $('#signUpBtn').textContent = 'Creating account...';
     await Database.Auth.signUp(email, password, name);
-    showToast('✅ Account created! You can now sign in.');
+
+    // ✉️ Email verification floating message
+    showToast('✅ Account created! A verification email has been sent to ' + email + '. Please check your inbox.', 6000);
+
+    // Switch to sign-in tab
     $$('.auth-tab')[0].click();
+    $('#loginEmail').value = email;
   } catch (err) {
     showToast('❌ ' + err.message);
   } finally {
@@ -196,6 +219,12 @@ $('#logoutBtn').addEventListener('click', async () => {
   $('#userDropdown').style.display = 'none';
   showToast('👋 Signed out.');
   navigate('home');
+});
+
+// Profile from dropdown
+$('#profileBtn').addEventListener('click', () => {
+  $('#userDropdown').style.display = 'none';
+  navigate('profile');
 });
 
 // Avatar dropdown toggle
@@ -266,34 +295,30 @@ async function initMap() {
   });
   App.map = map;
 
-  // Tile layer
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
     maxZoom: 19,
   }).addTo(map);
 
-  // Draw hazard zones
   const zoneColors = { critical: '#7C0000', high: '#D62828', medium: '#F97316', low: '#F59E0B' };
-  APP_CONFIG.hazardZones.forEach(zone => {
-    const color = zoneColors[zone.level] || '#64748B';
-    const poly = L.polygon(zone.coordinates, {
-      color:       color,
-      fillColor:   color,
-      fillOpacity: 0.25,
-      weight:      2,
-      dashArray:   zone.level === 'low' ? '6,4' : null,
-    }).addTo(map);
-    poly.bindPopup(`
-      <div>
-        <strong style="color:${color}">${zone.name}</strong><br>
-        <span style="font-size:0.78rem;color:#64748B;text-transform:capitalize">${zone.level} risk zone</span><br>
-        <p style="margin-top:6px;font-size:0.8rem">${zone.description}</p>
-      </div>
-    `);
-    App.mapZones.push(poly);
-  });
+  if (APP_CONFIG.hazardZones && APP_CONFIG.hazardZones.length) {
+    APP_CONFIG.hazardZones.forEach(zone => {
+      const color = zoneColors[zone.level] || '#64748B';
+      const poly = L.polygon(zone.coordinates, {
+        color: color, fillColor: color, fillOpacity: 0.25,
+        weight: 2, dashArray: zone.level === 'low' ? '6,4' : null,
+      }).addTo(map);
+      poly.bindPopup(`
+        <div>
+          <strong style="color:${color}">${zone.name}</strong><br>
+          <span style="font-size:0.78rem;color:#64748B;text-transform:capitalize">${zone.level} risk zone</span><br>
+          <p style="margin-top:6px;font-size:0.8rem">${zone.description}</p>
+        </div>
+      `);
+      App.mapZones.push(poly);
+    });
+  }
 
-  // Evacuation centers
   const evIcon = L.divIcon({ html: '🏫', className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
   APP_CONFIG.evacuationCenters.forEach(ec => {
     L.marker([ec.lat, ec.lng], { icon: evIcon })
@@ -301,7 +326,6 @@ async function initMap() {
       .bindPopup(`<strong>${ec.name}</strong><br>Capacity: ${ec.capacity} persons`);
   });
 
-  // Barangay Hall
   const hallIcon = L.divIcon({ html: '🏛️', className: '', iconSize: [24, 24], iconAnchor: [12, 12] });
   L.marker([center.lat, center.lng], { icon: hallIcon })
     .addTo(map)
@@ -309,12 +333,10 @@ async function initMap() {
 
   mapInitialized = true;
 
-  // Center button
   $('#mapCenterBtn').addEventListener('click', () => {
     map.setView([center.lat, center.lng], APP_CONFIG.mapZoom);
   });
 
-  // Severity filter
   $('#mapSevFilter').addEventListener('click', async (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
@@ -329,7 +351,6 @@ async function initMap() {
 
 async function refreshMapMarkers() {
   const L = window.L;
-  // Clear old markers
   App.mapMarkers.forEach(m => App.map.removeLayer(m));
   App.mapMarkers = [];
 
@@ -337,11 +358,9 @@ async function refreshMapMarkers() {
   const active  = reports.filter(r => r.status !== 'resolved');
 
   const sevColors = { critical:'#7C0000', high:'#D62828', medium:'#F97316', low:'#F59E0B' };
-
-  // Use random offsets around Marulas center since we don't have exact GPS per report
   const center = APP_CONFIG.mapCenter;
-  active.forEach((r, i) => {
-    // Deterministic offset based on report id hash
+
+  active.forEach((r) => {
     const seed = r.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
     const lat  = center.lat + ((seed % 97) - 48) * 0.00015;
     const lng  = center.lng + ((seed % 83) - 41) * 0.00015;
@@ -350,6 +369,9 @@ async function refreshMapMarkers() {
       html: `<div style="background:${color};width:22px;height:22px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;font-size:10px">${sevEmoji(r.severity)}</div>`,
       className: '', iconSize: [22, 22], iconAnchor: [11, 11],
     });
+    const imgThumb = r.imageUrl
+      ? `<img src="${r.imageUrl}" style="width:100%;border-radius:6px;margin-top:6px;max-height:100px;object-fit:cover" loading="lazy">`
+      : '';
     const marker = L.marker([lat, lng], { icon })
       .addTo(App.map)
       .bindPopup(`
@@ -360,12 +382,12 @@ async function refreshMapMarkers() {
           <span style="display:inline-block;margin-top:5px;padding:1px 8px;background:#E2E8F0;border-radius:999px;font-size:0.7rem;font-weight:600;margin-left:4px">${cap(r.status)}</span>
           <p style="margin-top:6px;font-size:0.78rem;color:#334155">${(r.description || '').slice(0, 120)}...</p>
           <p style="font-size:0.72rem;color:#64748B;margin-top:4px">${formatDate(r.date)}</p>
+          ${imgThumb}
         </div>
       `);
     App.mapMarkers.push(marker);
   });
 
-  // Sidebar incident list
   const list = $('#mapIncidentList');
   $('#incidentCount').textContent = active.length;
   if (active.length === 0) {
@@ -389,7 +411,7 @@ async function refreshMapMarkers() {
 }
 
 // ============================================================
-// REPORT FORM
+// REPORT FORM — IMAGE UPLOAD HANDLERS
 // ============================================================
 function resetForm() {
   ['reportTitle','reportType','reportSeverity','reportStreet','reportDescription',
@@ -402,8 +424,16 @@ function resetForm() {
   if (s) s.classList.remove('show');
   $('#titleCount').textContent = '0/100';
   $('#descCount').textContent  = '0/600';
-  // Show form elements
   $$('.form-section-title, .form-grid, .form-actions').forEach(el => el.style.display = '');
+
+  // Reset image state
+  App.pendingImageFile = null;
+  App.pendingImageUrl  = null;
+  $('#reportImage').value = '';
+  $('#imagePreviewWrap').style.display = 'none';
+  $('#imagePreview').src = '';
+  $('#uploadProgressWrap').style.display = 'none';
+  $('#uploadProgressBar').style.width = '0';
 }
 
 $('#reportTitle').addEventListener('input', function() { $('#titleCount').textContent = `${this.value.length}/100`; });
@@ -417,6 +447,53 @@ $$('.sev-btn').forEach(btn => {
   });
 });
 
+// Image file selection / camera capture
+$('#reportImage').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('⚠️ Image must be under 5MB.'); this.value = ''; return; }
+  App.pendingImageFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    $('#imagePreview').src = e.target.result;
+    $('#imagePreviewWrap').style.display = 'block';
+    $('#imageUploadZone').querySelector('p').textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+});
+
+// Drag & drop on upload zone
+const zone = $('#imageUploadZone');
+zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    $('#reportImage').files = e.dataTransfer.files;
+    $('#reportImage').dispatchEvent(new Event('change'));
+  }
+});
+
+$('#removeImageBtn').addEventListener('click', () => {
+  App.pendingImageFile = null;
+  App.pendingImageUrl  = null;
+  $('#reportImage').value = '';
+  $('#imagePreview').src = '';
+  $('#imagePreviewWrap').style.display = 'none';
+  $('#imageUploadZone').querySelector('p').textContent = 'Tap to upload or take a photo';
+});
+
+// Image preview click-to-zoom
+$('#imagePreview').addEventListener('click', () => {
+  const src = $('#imagePreview').src;
+  if (!src) return;
+  $('#imgLightboxImg').src = src;
+  $('#imgLightbox').classList.add('open');
+});
+
+// Submit report
 $('#submitReportBtn').addEventListener('click', async () => {
   const data = {
     title:           $('#reportTitle').value.trim(),
@@ -428,6 +505,7 @@ $('#submitReportBtn').addEventListener('click', async () => {
     reporterContact: $('#reporterContact').value.trim(),
     anonymous:       $('#reportAnonymous').checked,
     barangay:        'Brgy. Marulas',
+    imageUrl:        null,
   };
 
   const missing = ['title','type','severity','street','description','reporterName'].filter(k => !data[k]);
@@ -436,12 +514,26 @@ $('#submitReportBtn').addEventListener('click', async () => {
 
   try {
     $('#submitReportBtn').textContent = 'Submitting...';
+
+    // Upload image if selected
+    if (App.pendingImageFile) {
+      $('#uploadProgressWrap').style.display = 'block';
+      try {
+        data.imageUrl = await Database.uploadImage(App.pendingImageFile, (pct) => {
+          $('#uploadProgressBar').style.width = pct + '%';
+        });
+      } catch (imgErr) {
+        showToast('⚠️ Image upload failed — submitting without photo.');
+        data.imageUrl = null;
+      }
+      $('#uploadProgressWrap').style.display = 'none';
+    }
+
     const report = await Database.create(data);
     $$('.form-section-title, .form-grid, .form-actions').forEach(el => el.style.display = 'none');
     $('#formSuccess').classList.add('show');
     showToast(`✅ Report ${report.id} submitted! Synced to all users.`);
-    // Refresh home stats if open
-    mapInitialized = false; // force map refresh next visit
+    mapInitialized = false;
   } catch (err) {
     showToast('❌ Submission failed: ' + err.message);
   } finally {
@@ -455,22 +547,51 @@ $('#submitAnotherBtn').addEventListener('click', resetForm);
 // VIEW REPORTS PAGE
 // ============================================================
 async function initView() {
-  // Show admin UI
   $('#adminBadge').style.display    = App.isAdmin ? 'inline-flex' : 'none';
   $('#resolveNotice').style.display = App.isAdmin ? 'block' : 'none';
+
+  // Reset filters to "all" every time the page is visited
+  App.filters = { severity: 'all', status: 'all', search: '' };
+  $('#searchReports').value = '';
+  _resetChips('#severityFilter');
+  _resetChips('#statusFilter');
 
   await loadReports();
 }
 
+function _resetChips(selector) {
+  $$(selector + ' .chip').forEach(c => c.classList.remove('active'));
+  const first = $(selector + ' .chip');
+  if (first) first.classList.add('active');
+}
+
 async function loadReports() {
   try {
+    // Show loading state
+    $('#reportsTableBody').innerHTML =
+      '<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--gray-400)">Loading…</td></tr>';
+
     const reports = await Database.query(App.filters);
     renderTable(reports);
-    renderCards(reports);
+
     const empty = reports.length === 0;
-    $('#emptyState').style.display    = empty ? 'block' : 'none';
+    const hasActiveFilter = App.filters.severity !== 'all' ||
+                            App.filters.status   !== 'all' ||
+                            App.filters.search   !== '';
+
+    // Update result count in the filter bar
+    const countEl = $('#filterResultCount');
+    if (countEl) {
+      countEl.textContent = `${reports.length} report${reports.length !== 1 ? 's' : ''} found`;
+      countEl.style.display = 'inline';
+    }
+
+    // Show clear button only when a filter is active
+    const clearBtn = $('#clearFiltersBtn');
+    if (clearBtn) clearBtn.style.display = hasActiveFilter ? 'inline-flex' : 'none';
+
+    $('#emptyState').style.display       = empty ? 'block' : 'none';
     $('#reportsTableWrap').style.display = empty ? 'none' : 'block';
-    $('#reportsCards').style.display  = empty ? 'none' : 'flex';
   } catch (err) {
     showToast('❌ Failed to load reports: ' + err.message);
   }
@@ -491,9 +612,16 @@ function renderTable(reports) {
       <button class="action-btn delete-btn" data-action="delete" data-id="${r.id}">🗑</button>
     ` : '';
 
+    // Show a small camera icon badge if the report has a photo (no thumbnail)
+    const photoTag = r.imageUrl
+      ? `<span class="photo-tag" title="Has photo">📷</span>`
+      : '';
+
     return `<tr>
       <td><code style="font-size:0.72rem;color:var(--gray-500)">${r.id}</code></td>
-      <td><strong style="font-size:0.83rem">${r.title}</strong>${countdown}</td>
+      <td>
+        <strong style="font-size:0.83rem">${r.title}</strong>${photoTag}${countdown}
+      </td>
       <td style="white-space:nowrap;font-size:0.8rem">${typeLabel(r.type)}</td>
       <td><div style="font-size:0.8rem">${r.barangay}</div><div style="font-size:0.72rem;color:var(--gray-500)">${r.street}</div></td>
       <td><span class="sev-badge ${r.severity}">${sevEmoji(r.severity)} ${cap(r.severity)}</span></td>
@@ -507,25 +635,6 @@ function renderTable(reports) {
   }).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--gray-500)">No reports found.</td></tr>';
 }
 
-function renderCards(reports) {
-  const container = $('#reportsCards');
-  container.innerHTML = reports.map(r => `
-    <div class="report-card sev-${r.severity}" data-id="${r.id}">
-      <div class="rc-header">
-        <div class="rc-title">${r.title}</div>
-        <span class="sev-badge ${r.severity}">${sevEmoji(r.severity)}</span>
-      </div>
-      <div class="rc-body">${r.street}</div>
-      <div class="rc-footer">
-        <span class="status-badge ${r.status}">${cap(r.status)}</span>
-        <span style="font-size:0.72rem;color:var(--gray-500);margin-left:auto">${formatDate(r.date)}</span>
-      </div>
-    </div>
-  `).join('');
-  container.querySelectorAll('.report-card').forEach(el => {
-    el.addEventListener('click', () => openModal(el.dataset.id));
-  });
-}
 
 // Table action delegation
 $('#reportsTableBody').addEventListener('click', async (e) => {
@@ -535,7 +644,6 @@ $('#reportsTableBody').addEventListener('click', async (e) => {
 
   if (action === 'view') { openModal(id); return; }
 
-  // Admin-only actions
   if (!App.isAdmin) { showToast('🔒 Admin access required.'); return; }
 
   if (action === 'responding') {
@@ -557,26 +665,45 @@ $('#reportsTableBody').addEventListener('click', async (e) => {
 });
 
 // Filters
+let _searchDebounce = null;
+
 $('#severityFilter').addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip'); if (!chip) return;
-  $('#severityFilter .chip').forEach(c => c.classList.remove('active'));
+  const chip = e.target.closest('.chip[data-filter]');
+  if (!chip) return;
+  $$('#severityFilter .chip').forEach(c => c.classList.remove('active'));
   chip.classList.add('active');
   App.filters.severity = chip.dataset.filter;
   loadReports();
 });
+
 $('#statusFilter').addEventListener('click', (e) => {
-  const chip = e.target.closest('.chip'); if (!chip) return;
-  $('#statusFilter .chip').forEach(c => c.classList.remove('active'));
+  const chip = e.target.closest('.chip[data-filter]');
+  if (!chip) return;
+  $$('#statusFilter .chip').forEach(c => c.classList.remove('active'));
   chip.classList.add('active');
   App.filters.status = chip.dataset.filter;
   loadReports();
 });
+
 $('#searchReports').addEventListener('input', function() {
-  App.filters.search = this.value;
+  clearTimeout(_searchDebounce);
+  const val = this.value;
+  _searchDebounce = setTimeout(() => {
+    App.filters.search = val;
+    loadReports();
+  }, 280); // debounce 280ms so we don't query on every keystroke
+});
+
+$('#clearFiltersBtn').addEventListener('click', () => {
+  App.filters = { severity: 'all', status: 'all', search: '' };
+  $('#searchReports').value = '';
+  _resetChips('#severityFilter');
+  _resetChips('#statusFilter');
   loadReports();
 });
+
 $('#refreshBtn').addEventListener('click', async () => {
-  showToast('↻ Refreshing...');
+  showToast('↻ Refreshing…');
   await loadReports();
   await initHome();
   showToast('✅ Data refreshed.');
@@ -599,10 +726,31 @@ async function openModal(id) {
     </div>
   ` : '';
 
+  // Build a prominent full-width photo hero when image exists
+  const imageSection = r.imageUrl ? `
+    <div class="modal-photo">
+      <img class="modal-photo-img" src="${r.imageUrl}" alt="Incident photo"
+        loading="lazy"
+        onclick="openLightbox('${r.imageUrl}')"
+        onerror="this.closest('.modal-photo').style.display='none'">
+      <div class="modal-photo-overlay">
+        <span class="modal-photo-zoom">🔍 Tap to zoom</span>
+        <span class="modal-photo-label">📷 Photo Evidence</span>
+      </div>
+    </div>
+  ` : `
+    <div class="modal-no-photo">
+      <span>📷</span> No photo submitted for this report
+    </div>
+  `;
+
   $('#modalBody').innerHTML = `
     <div class="modal-sev-bar ${r.severity}"></div>
     <div class="modal-title">${r.title}</div>
     <div class="modal-sub">${r.id} · Submitted ${formatDate(r.date)}</div>
+
+    ${imageSection}
+
     <div class="modal-details">
       <div class="modal-detail-item"><label>Type</label><span>${typeLabel(r.type)}</span></div>
       <div class="modal-detail-item"><label>Severity</label><span><span class="sev-badge ${r.severity}">${sevEmoji(r.severity)} ${cap(r.severity)}</span></span></div>
@@ -611,6 +759,7 @@ async function openModal(id) {
       <div class="modal-detail-item"><label>Status</label><span><span class="status-badge ${r.status}">${cap(r.status)}</span></span></div>
       <div class="modal-detail-item"><label>Reported By</label><span>${r.anonymous ? '🕵️ Anonymous' : r.reporterName}</span></div>
     </div>
+
     <div class="modal-desc">${r.description || 'No description provided.'}</div>
     ${adminActions}
   `;
@@ -637,15 +786,205 @@ window.modalAction = async function(action, id) {
   await initHome();
 };
 
+window.openLightbox = function(src) {
+  $('#imgLightboxImg').src = src;
+  $('#imgLightbox').classList.add('open');
+};
+
 function closeModal() { $('#modalOverlay').classList.remove('open'); }
 $('#modalClose').addEventListener('click', closeModal);
 $('#modalOverlay').addEventListener('click', (e) => { if (e.target === $('#modalOverlay')) closeModal(); });
 
+// Lightbox close
+$('#imgLightboxClose').addEventListener('click', () => $('#imgLightbox').classList.remove('open'));
+$('#imgLightbox').addEventListener('click', (e) => {
+  if (e.target === $('#imgLightbox')) $('#imgLightbox').classList.remove('open');
+});
+
+// ============================================================
+// PROFILE PAGE
+// ============================================================
+async function initProfile() {
+  const card = $('#profileCard');
+  if (!App.currentUser) {
+    card.innerHTML = `
+      <div class="profile-not-logged">
+        <p style="font-size:2rem;margin-bottom:12px">🔐</p>
+        <h3>Sign in to view your profile</h3>
+        <p style="margin-bottom:18px">Manage your account information and security settings.</p>
+        <button class="btn-submit" data-page="login">Sign In</button>
+      </div>
+    `;
+    return;
+  }
+
+  const user     = App.currentUser;
+  const name     = user.user_metadata?.full_name || user.email.split('@')[0];
+  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const role     = App.isAdmin ? 'Admin' : 'Resident';
+  const roleIcon = App.isAdmin ? '🛡️' : '👤';
+  const joinDate = user.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-PH', { month:'long', day:'numeric', year:'numeric' })
+    : 'N/A';
+
+  card.innerHTML = `
+    <div class="profile-header">
+      <div class="profile-avatar">${initials}</div>
+      <div class="profile-info">
+        <h2>${name}</h2>
+        <p>${user.email}</p>
+        <span class="profile-role-badge ${App.isAdmin ? 'admin' : 'resident'}">${roleIcon} ${role}</span>
+      </div>
+    </div>
+
+    <!-- Account Info -->
+    <div class="profile-section">
+      <div class="profile-section-title">Account Information</div>
+      <div class="profile-info-row"><span class="profile-info-label">Email</span><span class="profile-info-value">${user.email}</span></div>
+      <div class="profile-info-row"><span class="profile-info-label">Role</span><span class="profile-info-value">${roleIcon} ${role}</span></div>
+      <div class="profile-info-row"><span class="profile-info-label">Account Created</span><span class="profile-info-value">${joinDate}</span></div>
+      <div class="profile-info-row"><span class="profile-info-label">Supabase ID</span><span class="profile-info-value" style="font-size:0.72rem;color:var(--gray-500)">${user.id || 'Local mode'}</span></div>
+    </div>
+
+    <!-- Change Name -->
+    <div class="profile-section">
+      <div class="profile-section-title">Update Display Name</div>
+      <div class="profile-form-group">
+        <label>Full Name</label>
+        <input type="text" id="profileNewName" value="${name}" placeholder="Your full name">
+      </div>
+      <button class="profile-save-btn" id="saveNameBtn">Save Name</button>
+      <div class="profile-feedback" id="nameFeedback"></div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="profile-section">
+      <div class="profile-section-title">Change Password</div>
+      ${!Database.isOnline ? '<p style="font-size:0.8rem;color:var(--gray-500);margin-bottom:12px">⚠️ Password change requires Supabase connection.</p>' : ''}
+      <div class="profile-form-group">
+        <label>Current Password</label>
+        <input type="password" id="profileCurrentPw" placeholder="Enter current password">
+      </div>
+      <div class="profile-form-group">
+        <label>New Password</label>
+        <input type="password" id="profileNewPw" placeholder="Min. 8 characters">
+        <div class="pw-strength" id="profilePwStrengthBars" style="margin-top:6px">
+          <div class="pw-strength-bar" id="ppBar1"></div>
+          <div class="pw-strength-bar" id="ppBar2"></div>
+          <div class="pw-strength-bar" id="ppBar3"></div>
+          <div class="pw-strength-bar" id="ppBar4"></div>
+        </div>
+        <div class="pw-strength-label" id="profilePwLabel"></div>
+      </div>
+      <div class="profile-form-group">
+        <label>Confirm New Password</label>
+        <input type="password" id="profileConfirmPw" placeholder="Repeat new password">
+      </div>
+      <button class="profile-save-btn" id="savePasswordBtn" ${!Database.isOnline ? 'disabled' : ''}>Change Password</button>
+      <div class="profile-feedback" id="passwordFeedback"></div>
+    </div>
+  `;
+
+  // Password strength meter for profile page
+  $('#profileNewPw').addEventListener('input', function() {
+    const { score, label, cls } = Database.checkPasswordStrength(this.value);
+    ['ppBar1','ppBar2','ppBar3','ppBar4'].forEach((id, i) => {
+      const bar = $(`#${id}`);
+      bar.className = 'pw-strength-bar';
+      if (i < score && this.value.length > 0) bar.classList.add(cls);
+    });
+    $('#profilePwLabel').textContent = label;
+    $('#profilePwLabel').style.color = cls === 'weak' ? '#EF4444' : cls === 'fair' ? '#F59E0B' : '#16A34A';
+  });
+
+  // Save name
+  $('#saveNameBtn').addEventListener('click', async () => {
+    const newName = $('#profileNewName').value.trim();
+    const fb = $('#nameFeedback');
+    try {
+      $('#saveNameBtn').disabled = true;
+      $('#saveNameBtn').textContent = 'Saving...';
+      const updatedUser = await Database.Auth.updateName(newName);
+      App.currentUser = updatedUser || { ...App.currentUser, user_metadata: { ...App.currentUser.user_metadata, full_name: newName } };
+      // Update header display
+      const initials2 = newName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      $('#userAvatar').textContent = initials2;
+      $('#userNameDisplay').textContent = newName;
+      fb.className = 'profile-feedback ok';
+      fb.textContent = '✓ Name updated successfully!';
+    } catch (err) {
+      fb.className = 'profile-feedback err';
+      fb.textContent = '✕ ' + err.message;
+    } finally {
+      $('#saveNameBtn').disabled = false;
+      $('#saveNameBtn').textContent = 'Save Name';
+    }
+  });
+
+  // Change password
+  $('#savePasswordBtn').addEventListener('click', async () => {
+    const currentPw = $('#profileCurrentPw').value;
+    const newPw     = $('#profileNewPw').value;
+    const confirmPw = $('#profileConfirmPw').value;
+    const fb = $('#passwordFeedback');
+
+    if (!currentPw || !newPw || !confirmPw) {
+      fb.className = 'profile-feedback err';
+      fb.textContent = '✕ Please fill in all password fields.';
+      return;
+    }
+    if (newPw !== confirmPw) {
+      fb.className = 'profile-feedback err';
+      fb.textContent = '✕ New passwords do not match.';
+      return;
+    }
+
+    try {
+      $('#savePasswordBtn').disabled = true;
+      $('#savePasswordBtn').textContent = 'Changing...';
+      await Database.Auth.updatePassword(currentPw, newPw);
+      fb.className = 'profile-feedback ok';
+      fb.textContent = '✓ Password changed successfully! You may need to sign in again.';
+      $('#profileCurrentPw').value = '';
+      $('#profileNewPw').value = '';
+      $('#profileConfirmPw').value = '';
+    } catch (err) {
+      fb.className = 'profile-feedback err';
+      fb.textContent = '✕ ' + err.message;
+    } finally {
+      $('#savePasswordBtn').disabled = false;
+      $('#savePasswordBtn').textContent = 'Change Password';
+    }
+  });
+}
+
+// ============================================================
+// LOW BANDWIDTH DETECTION
+// ============================================================
+function detectLowBandwidth() {
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!conn) return;
+
+  const slowTypes = ['slow-2g', '2g'];
+  if (slowTypes.includes(conn.effectiveType) || conn.saveData) {
+    const banners = $('#headerBanners');
+    const existing = banners.querySelector('.lite-banner');
+    if (existing) return;
+
+    const div = document.createElement('div');
+    div.className = 'lite-banner';
+    div.innerHTML = `
+      <span>📶</span>
+      <span>Slow connection detected. Switch to <a href="lite.html">⚡ Lite Mode</a> for a faster experience.</span>
+      <button onclick="this.parentElement.remove()" title="Dismiss">✕</button>
+    `;
+    banners.appendChild(div);
+  }
+}
+
 // ============================================================
 // MOBILE MENU
 // ============================================================
-
-
 $('#mobileMenuBtn').addEventListener('click', function() {
   $('#mobileNav').classList.toggle('open');
   this.classList.toggle('open');
@@ -655,7 +994,7 @@ $('#mobileMenuBtn').addEventListener('click', function() {
 // REAL-TIME SYNC
 // ============================================================
 function initRealtime() {
-  Database.subscribe(async (payload) => {
+  Database.subscribe(async () => {
     showToast('🔄 Data updated by another user.');
     if (App.currentPage === 'home') await initHome();
     if (App.currentPage === 'view') await loadReports();
@@ -681,33 +1020,32 @@ function updateDbIndicator(online) {
   const el = $('#dbIndicator');
   el.className = 'db-indicator ' + (online ? 'online' : 'offline');
   el.querySelector('.db-label').textContent = online ? 'Live Sync' : 'Local DB';
-  el.title = online ? 'Connected to Supabase — real-time sync active' : 'Using localStorage — configure Supabase in config.js for real-time sync';
+  el.title = online
+    ? 'Connected to Supabase — real-time sync active'
+    : 'Using localStorage — configure Supabase in config.js for real-time sync';
 }
 
 // ============================================================
 // BOOT
 // ============================================================
 async function boot() {
-  // Init database
   const online = await Database.init();
   updateDbIndicator(online);
 
-  // Init auth
   await initAuth();
 
-  // Real-time if online
   if (online) initRealtime();
 
-  // Auto-purge every hour
   await runAutoPurge();
   setInterval(runAutoPurge, 3600 * 1000);
 
-  // Refresh stats every 30s
   setInterval(async () => {
     if (App.currentPage === 'home') await initHome();
   }, 30000);
 
-  // Initial page
+  // Detect slow connection
+  detectLowBandwidth();
+
   navigate('home');
 
   console.log('%cBaHALA v2 — Brgy. Marulas Flood Warning System', 'color:#005F99;font-size:14px;font-weight:bold');
