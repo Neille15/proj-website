@@ -429,11 +429,20 @@ function resetForm() {
   // Reset image state
   App.pendingImageFile = null;
   App.pendingImageUrl  = null;
-  $('#reportImage').value = '';
+  if ($('#reportImageUpload')) $('#reportImageUpload').value = '';
+  if ($('#reportImageCamera')) $('#reportImageCamera').value = '';
   $('#imagePreviewWrap').style.display = 'none';
   $('#imagePreview').src = '';
   $('#uploadProgressWrap').style.display = 'none';
   $('#uploadProgressBar').style.width = '0';
+  const actionBtns = $('.image-action-buttons');
+  if (actionBtns) actionBtns.style.display = 'flex';
+  const uploadZone = $('#imageUploadZone');
+  if (uploadZone) {
+    uploadZone.style.display = 'block';
+    const textNode = uploadZone.querySelector('p');
+    if (textNode) textNode.textContent = 'Or drag and drop an image here';
+  }
 }
 
 $('#reportTitle').addEventListener('input', function() { $('#titleCount').textContent = `${this.value.length}/100`; });
@@ -448,7 +457,10 @@ $$('.sev-btn').forEach(btn => {
 });
 
 // Image file selection / camera capture
-$('#reportImage').addEventListener('change', function() {
+$('#btnCameraImage').addEventListener('click', () => $('#reportImageCamera').click());
+$('#btnUploadImage').addEventListener('click', () => $('#reportImageUpload').click());
+
+const handleImageSelection = function() {
   const file = this.files[0];
   if (!file) return;
   if (file.size > 5 * 1024 * 1024) { showToast('⚠️ Image must be under 5MB.'); this.value = ''; return; }
@@ -458,9 +470,14 @@ $('#reportImage').addEventListener('change', function() {
     $('#imagePreview').src = e.target.result;
     $('#imagePreviewWrap').style.display = 'block';
     $('#imageUploadZone').querySelector('p').textContent = file.name;
+    $('.image-action-buttons').style.display = 'none';
+    $('#imageUploadZone').style.display = 'none';
   };
   reader.readAsDataURL(file);
-});
+};
+
+$('#reportImageUpload').addEventListener('change', handleImageSelection);
+$('#reportImageCamera').addEventListener('change', handleImageSelection);
 
 // Drag & drop on upload zone
 const zone = $('#imageUploadZone');
@@ -471,18 +488,21 @@ zone.addEventListener('drop', (e) => {
   zone.classList.remove('dragover');
   const file = e.dataTransfer.files[0];
   if (file && file.type.startsWith('image/')) {
-    $('#reportImage').files = e.dataTransfer.files;
-    $('#reportImage').dispatchEvent(new Event('change'));
+    $('#reportImageUpload').files = e.dataTransfer.files;
+    $('#reportImageUpload').dispatchEvent(new Event('change'));
   }
 });
 
 $('#removeImageBtn').addEventListener('click', () => {
   App.pendingImageFile = null;
   App.pendingImageUrl  = null;
-  $('#reportImage').value = '';
+  if ($('#reportImageUpload')) $('#reportImageUpload').value = '';
+  if ($('#reportImageCamera')) $('#reportImageCamera').value = '';
   $('#imagePreview').src = '';
   $('#imagePreviewWrap').style.display = 'none';
-  $('#imageUploadZone').querySelector('p').textContent = 'Tap to upload or take a photo';
+  $('.image-action-buttons').style.display = 'flex';
+  $('#imageUploadZone').style.display = 'block';
+  $('#imageUploadZone').querySelector('p').textContent = 'Or drag and drop an image here';
 });
 
 // Image preview click-to-zoom

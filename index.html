@@ -319,12 +319,17 @@
       <div class="form-grid">
         <div class="form-group full-width">
           <label>Upload or Capture Image</label>
+          <div class="image-action-buttons" style="display:flex; gap:12px; margin-bottom:12px;">
+            <button type="button" class="btn-cancel" id="btnCameraImage" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px;">📷 Take Photo</button>
+            <button type="button" class="btn-cancel" id="btnUploadImage" style="flex:1; display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px;">📁 Upload File</button>
+          </div>
           <div class="image-upload-zone" id="imageUploadZone">
-            <input type="file" id="reportImage" accept="image/*" capture="environment">
-            <div class="image-upload-icon">📷</div>
-            <p>Tap to upload or take a photo</p>
+            <div class="image-upload-icon">📥</div>
+            <p>Or drag and drop an image here</p>
             <small>JPG, PNG, WEBP — max 5MB</small>
           </div>
+          <input type="file" id="reportImageUpload" accept="image/*" style="display:none">
+          <input type="file" id="reportImageCamera" accept="image/*" capture="environment" style="display:none">
           <div id="imagePreviewWrap" style="display:none" class="image-preview-wrap">
             <img id="imagePreview" class="image-preview" src="" alt="Preview">
             <button class="image-preview-remove" id="removeImageBtn" title="Remove image">✕</button>
