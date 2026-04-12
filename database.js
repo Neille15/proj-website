@@ -464,6 +464,21 @@ const Database = (() => {
     }
   }
 
+  async function updateZone(id, zoneData) {
+    if (isSupabaseReady) {
+      const { data, error } = await supabase.from('hazard_zones').update(zoneData).eq('id', id).select().maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Zone not found or update failed (check permissions).');
+      return data;
+    }
+    const all = await getZones();
+    const idx = all.findIndex(z => z.id === id);
+    if (idx === -1) throw new Error('Zone not found');
+    all[idx] = { ...all[idx], ...zoneData, updated_at: new Date().toISOString() };
+    localStorage.setItem('bahala_zones_v3', JSON.stringify(all));
+    return all[idx];
+  }
+
   /* ----------------------------------------------------------
      NORMALIZATION — convert Supabase snake_case to camelCase
      ---------------------------------------------------------- */
@@ -567,7 +582,7 @@ const Database = (() => {
     getAll, getById, create,
     updateStatus, deleteReport,
     query, stats,
-    getZones, createZone, deleteZone,
+    getZones, createZone, updateZone, deleteZone,
     purgeExpiredResolved,
     get isOnline() { return isSupabaseReady; },
   };

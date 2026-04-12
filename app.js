@@ -311,7 +311,13 @@ async function initMap() {
   App.renderHazardZones = async () => {
     App.mapZones.forEach(poly => map.removeLayer(poly));
     App.mapZones = [];
-    const zones = await Database.getZones();
+    let zones = await Database.getZones();
+    
+    // Apply Filter
+    if (App.mapFilters.severity !== 'all') {
+      zones = zones.filter(z => z.level === App.mapFilters.severity);
+    }
+
     const zoneColors = { critical: '#7C0000', high: '#D62828', medium: '#F97316', low: '#F59E0B' };
     
     zones.forEach(zone => {
@@ -329,13 +335,68 @@ async function initMap() {
           <p style="margin-top:6px;font-size:0.8rem">${zone.description}</p>
       `;
       if (App.isAdmin) {
-         popupHtml += `<button class="btn-cancel" style="margin-top:8px;padding:4px;font-size:0.7rem;width:100%" onclick="App._deleteZone('${zone.id}')">Delete Zone</button>`;
+         popupHtml += `
+           <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:8px;">
+             <button class="btn-submit" style="padding:4px; font-size:0.7rem;" onclick="App._editZone('${zone.id}')">📝 Edit Info</button>
+             <button class="btn-primary" style="padding:4px; font-size:0.7rem; background:var(--blue-600)" onclick="App._reshapeZone('${zone.id}')">📏 Reshape</button>
+             <button class="btn-cancel" style="padding:4px; font-size:0.7rem; grid-column:span 2" onclick="App._deleteZone('${zone.id}')">🗑️ Delete Zone</button>
+           </div>
+         `;
       }
       popupHtml += `</div>`;
       
       poly.bindPopup(popupHtml);
       App.mapZones.push(poly);
     });
+  };
+
+  App._editZone = async (id) => {
+    try {
+      const zones = await Database.getZones();
+      const zone = zones.find(z => z.id === id);
+      if (!zone) return;
+      
+      App.editingZoneId = id;
+      $('#zoneModalTitle').textContent = 'Edit Risk Zone';
+      $('#zoneSaveBtn').textContent = 'Update Zone';
+      $('#zoneName').value = zone.name;
+      $('#zoneSeverity').value = zone.level;
+      $('#zoneDesc').value = zone.description || '';
+      
+      // Select severity button
+      $$('#zoneSeverityPicker .sev-btn').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.value === zone.level);
+      });
+      
+      $('#zoneModalOverlay').classList.add('open');
+      App.map.closePopup();
+    } catch(e) {
+      alert('Error loading zone: ' + e.message);
+    }
+  };
+
+  App._reshapeZone = async (id) => {
+    const zones = await Database.getZones();
+    const zone = zones.find(z => z.id === id);
+    if (!zone) return;
+    
+    App.reshapingZoneId = id;
+    App.editingZoneId = id; // Also set this for the save logic
+    
+    // Start drawing mode
+    isDrawing = true;
+    currentPoints = [];
+    $('#btnDrawStart').style.display = 'none';
+    $('#btnDrawCancel').style.display = 'block';
+    $('#btnDrawFinish').style.display = 'block';
+    $('#drawInstructions').innerHTML = `Reshaping: <strong>${zone.name}</strong><br>Click map to redraw points`;
+    $('#drawInstructions').style.display = 'block';
+    $('#hazardMap').style.cursor = 'crosshair';
+    
+    App.map.closePopup();
+    
+    // Hide the actual zone layer temporarily to avoid confusion (or keep as ghost by styling)
+    // For now, let's just draw on top.
   };
 
   App._deleteZone = async (id) => {
@@ -368,11 +429,14 @@ async function initMap() {
 
   const stopDrawing = () => {
     isDrawing = false;
+    App.reshapingZoneId = null;
+    App.editingZoneId = null;
     if (currentPolyline) { map.removeLayer(currentPolyline); currentPolyline = null; }
     $('#btnDrawStart').style.display = 'block';
     $('#btnDrawCancel').style.display = 'none';
     $('#btnDrawFinish').style.display = 'none';
     $('#drawInstructions').style.display = 'none';
+    $('#drawInstructions').textContent = 'Click map to add points';
     $('#hazardMap').style.cursor = '';
   };
 
@@ -392,7 +456,16 @@ async function initMap() {
 
   $('#btnDrawFinish').addEventListener('click', () => {
     if (currentPoints.length < 3) { showToast('⚠️ Draw at least 3 points to form a polygon.'); return; }
-    $('#zoneModalOverlay').classList.add('open');
+    
+    if (App.reshapingZoneId) {
+      // If we're just reshaping, we don't necessarily need the modal if the info is the same,
+      // but let's open the modal to allow confirming name/risk too.
+      App._editZone(App.reshapingZoneId);
+    } else {
+      $('#zoneModalTitle').textContent = 'Save Risk Zone';
+      $('#zoneSaveBtn').textContent = 'Save Zone';
+      $('#zoneModalOverlay').classList.add('open');
+    }
   });
 
   // Zone Modal Handlers
@@ -406,6 +479,9 @@ async function initMap() {
 
   $('#zoneCancelBtn').addEventListener('click', () => {
     $('#zoneModalOverlay').classList.remove('open');
+    if (!isDrawing) {
+       App.editingZoneId = null;
+    }
   });
 
   $('#zoneSaveBtn').addEventListener('click', async () => {
@@ -416,21 +492,36 @@ async function initMap() {
     
     $('#zoneSaveBtn').textContent = 'Saving...';
     try {
-      await Database.createZone({
-        name, level: severity, description: desc, coordinates: currentPoints
-      });
+      const zoneData = {
+        name, level: severity, description: desc
+      };
+      
+      // Add coordinates if we just drew/reshaped them
+      if (currentPoints.length >= 3) {
+        zoneData.coordinates = currentPoints;
+      }
+      
+      if (App.editingZoneId) {
+        await Database.updateZone(App.editingZoneId, zoneData);
+        showToast('✅ Zone updated');
+      } else {
+        await Database.createZone(zoneData);
+        showToast('✅ Saved risk zone');
+      }
+      
       $('#zoneModalOverlay').classList.remove('open');
       stopDrawing();
       App.renderHazardZones();
-      showToast('✅ Saved risk zone');
     } catch(e) {
       alert('Error saving zone: ' + e.message);
     } finally {
-      $('#zoneSaveBtn').textContent = 'Save Zone';
-      $('#zoneName').value = '';
-      $('#zoneSeverity').value = '';
-      $('#zoneDesc').value = '';
-      $$('#zoneSeverityPicker .sev-btn').forEach(b => b.classList.remove('selected'));
+      $('#zoneSaveBtn').textContent = App.editingZoneId ? 'Update Zone' : 'Save Zone';
+      if (!App.editingZoneId) {
+        $('#zoneName').value = '';
+        $('#zoneSeverity').value = '';
+        $('#zoneDesc').value = '';
+        $$('#zoneSeverityPicker .sev-btn').forEach(b => b.classList.remove('selected'));
+      }
     }
   });
 
@@ -446,22 +537,47 @@ async function initMap() {
     .addTo(map)
     .bindPopup('<strong>Brgy. Marulas Hall</strong><br>Main coordination center');
 
-  mapInitialized = true;
-
   $('#mapCenterBtn').addEventListener('click', () => {
     map.setView([center.lat, center.lng], APP_CONFIG.mapZoom);
   });
 
-  $('#mapSevFilter').addEventListener('click', async (e) => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    $('#mapSevFilter .chip').forEach(c => c.classList.remove('active'));
-    chip.classList.add('active');
-    App.mapFilters.severity = chip.dataset.filter;
-    await refreshMapMarkers();
-  });
+  initMapFilters();
 
   await refreshMapMarkers();
+  if (typeof App.renderHazardZones === 'function') {
+    await App.renderHazardZones();
+  }
+
+  mapInitialized = true;
+}
+
+// Global Map Filter initialization
+function initMapFilters() {
+  const filterGroup = $('#mapSevFilter');
+  if (!filterGroup) return;
+
+  filterGroup.addEventListener('click', async (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+
+    // UI Update
+    $$('#mapSevFilter .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+
+    // Filter Logic
+    App.mapFilters.severity = chip.dataset.filter;
+    
+    if (App.map && mapInitialized) {
+      try {
+        await refreshMapMarkers();
+        if (typeof App.renderHazardZones === 'function') {
+          await App.renderHazardZones();
+        }
+      } catch (err) {
+        console.error('Filter update error:', err);
+      }
+    }
+  });
 }
 
 async function refreshMapMarkers() {
@@ -488,8 +604,9 @@ async function refreshMapMarkers() {
       ? `<img src="${r.imageUrl}" style="width:100%;border-radius:6px;margin-top:6px;max-height:100px;object-fit:cover" loading="lazy">`
       : '';
     const marker = L.marker([lat, lng], { icon })
-      .addTo(App.map)
-      .bindPopup(`
+      .addTo(App.map);
+    marker.reportId = r.id; // Store ID on marker
+    marker.bindPopup(`
         <div>
           <strong>${r.title}</strong><br>
           <span style="font-size:0.75rem;color:#64748B">${r.street}</span><br>
@@ -509,17 +626,21 @@ async function refreshMapMarkers() {
     list.innerHTML = '<div class="map-incident-empty">No active incidents matching filter.</div>';
     return;
   }
-  list.innerHTML = active.map((r, i) => `
-    <div class="map-incident-item sev-${r.severity}" data-idx="${i}">
+  
+  list.innerHTML = active.map((r) => `
+    <div class="map-incident-item sev-${r.severity}" data-id="${r.id}">
       <div class="map-incident-title">${r.title}</div>
       <div class="map-incident-meta">${r.street} · ${formatDate(r.date)}</div>
     </div>
   `).join('');
-  list.querySelectorAll('.map-incident-item').forEach((el, i) => {
+
+  list.querySelectorAll('.map-incident-item').forEach((el) => {
     el.addEventListener('click', () => {
-      if (App.mapMarkers[i]) {
-        App.mapMarkers[i].openPopup();
-        App.map.flyTo(App.mapMarkers[i].getLatLng(), 17);
+      const id = el.dataset.id;
+      const marker = App.mapMarkers.find(m => m.reportId === id);
+      if (marker) {
+        marker.openPopup();
+        App.map.flyTo(marker.getLatLng(), 17);
       }
     });
   });
