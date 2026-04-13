@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BaHALA Lite — Brgy. Marulas Flood Warning</title>
 <meta name="description" content="BaHALA Lite — Low bandwidth version of the Marulas Flood Warning System.">
+<script src="config.js"></script>
+<script src="database.js"></script>
 <style>
 /* ============================================================
    BaHALA Lite — Minimal CSS, no external fonts/assets
@@ -264,15 +266,11 @@ textarea{resize:vertical;min-height:80px}
 <script>
 'use strict';
 
-/* ---- Config refs ---- */
-const LITE_LOCAL_KEY = 'bahala_reports_v3';
-const LITE_SEED_KEY  = 'bahala_seeded_v3';
-
-let supabase = null;
 let isOnline = false;
 
 function showLiteToast(msg, dur = 3500) {
   const t = document.getElementById('liteToast');
+  if (!t) return;
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), dur);
@@ -290,74 +288,35 @@ function formatDate(iso) {
 
 async function initLite() {
   const statusEl = document.getElementById('liteDbStatus');
-  // Use the shared config from config.js loaded in <head>
-  const config = (typeof SUPABASE_CONFIG !== 'undefined') ? SUPABASE_CONFIG : null;
-
-  if (config && config.url && !config.url.includes('YOUR_PROJECT_ID')) {
-    try {
-      const sdk = document.createElement('script');
-      sdk.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-      sdk.onload = async () => {
-        try {
-          supabase = window.supabase.createClient(config.url, config.anonKey);
-          isOnline = true;
-          statusEl.textContent = '🟢 Live Sync';
-          statusEl.style.background = '#166534';
-          console.log("⚡ BaHALA Lite: Connected to Supabase");
-          await loadLiteData();
-          initRealtimeLite(); // Start real-time sync
-        } catch (clientErr) {
-          console.error("Supabase client init failed:", clientErr);
-          statusEl.textContent = '🟠 Local DB';
-          statusEl.style.background = '#92400E';
-          await loadLiteData(); 
-        }
-      };
-      sdk.onerror = async () => { 
-        statusEl.textContent = '🟠 Local DB';
-        statusEl.style.background = '#92400E';
-        await loadLiteData(); 
-      };
-      document.head.appendChild(sdk);
-    } catch(e) {
-      statusEl.textContent = '🟠 Local DB';
-      statusEl.style.background = '#92400E';
+  
+  // Use shared Database module
+  isOnline = await Database.init();
+  
+  if (isOnline) {
+    statusEl.textContent = '🟢 Live Sync';
+    statusEl.style.background = '#166534';
+    console.log("⚡ BaHALA Lite: Using Shared Database Module (Supabase)");
+    
+    // Subscribe to real-time changes
+    Database.subscribe(async () => {
+      console.log("🔄 Lite Sync: Change detected");
       await loadLiteData();
-    }
+      showLiteToast('🔄 Data updated');
+    });
   } else {
     statusEl.textContent = '🟠 Local DB';
     statusEl.style.background = '#92400E';
-    await loadLiteData();
+    console.log("⚡ BaHALA Lite: Using LocalStorage Fallback");
   }
-}
 
-function initRealtimeLite() {
-  if (!supabase || !isOnline) return;
-
-  // Listen for ALL changes on reports table for instant UI updates
-  supabase
-    .channel('lite-sync')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, 
-      async (payload) => {
-        console.log("🔄 Lite Sync: Data changed, refreshing list...");
-        await loadLiteData();
-        showLiteToast('🔄 Data updated');
-      })
-    .subscribe();
+  await loadLiteData();
 }
 
 async function loadLiteData() {
   try {
-    let reports = [];
-    if (isOnline && supabase) {
-      const { data } = await supabase
-        .from('reports').select('id,title,type,severity,street,barangay,status,created_at')
-        .order('created_at', { ascending: false }).limit(30);
-      reports = data || [];
-    } else {
-      reports = JSON.parse(localStorage.getItem(LITE_LOCAL_KEY) || '[]');
-    }
-
+    // Use Database.query with 'all' filters to get active reports
+    const reports = await Database.query({ severity:'all', status:'all', search:'' });
+    
     // Stats
     document.getElementById('lTotal').textContent    = reports.length;
     document.getElementById('lCritical').textContent = reports.filter(r => r.severity === 'critical').length;
@@ -417,26 +376,17 @@ async function submitLiteReport() {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
 
-  const payload = {
+  const data = {
     title, type, severity: sev, street, description: desc,
-    reporter_name: anon ? 'Anonymous' : name,
-    reporter_contact: contact,
+    reporterName: anon ? 'Anonymous' : name,
+    reporterContact: contact,
     anonymous: anon,
     barangay: 'Brgy. Marulas',
-    status: 'pending',
   };
 
   try {
-    if (isOnline && supabase) {
-      const { error } = await supabase.from('reports').insert(payload);
-      if (error) throw error;
-    } else {
-      // localStorage fallback
-      const all  = JSON.parse(localStorage.getItem(LITE_LOCAL_KEY) || '[]');
-      const id   = 'RPT-' + Date.now().toString(36).toUpperCase();
-      all.unshift({ id, ...payload, date: new Date().toISOString() });
-      localStorage.setItem(LITE_LOCAL_KEY, JSON.stringify(all));
-    }
+    // Use Database.create from external module
+    await Database.create(data);
 
     const msg = document.getElementById('lFormMsg');
     msg.style.display = 'block';
