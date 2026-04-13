@@ -58,11 +58,16 @@ const Database = (() => {
   function subscribe(callback) {
     if (!isSupabaseReady) return;
     realtimeChannel = supabase
-      .channel('reports-realtime')
+      .channel('db-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' },
         (payload) => {
-          console.log('[DB] Real-time change:', payload.eventType);
-          callback(payload);
+          console.log('[DB] Real-time change (reports):', payload.eventType);
+          callback({ table: 'reports', ...payload });
+        })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hazard_zones' },
+        (payload) => {
+          console.log('[DB] Real-time change (zones):', payload.eventType);
+          callback({ table: 'hazard_zones', ...payload });
         })
       .subscribe();
   }

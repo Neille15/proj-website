@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BaHALA — Brgy. Marulas Flood Early Warning System</title>
+<title>BaHALA — Brgy. Marulas Flood Early Warning System </title>
+<link rel="icon" type="image/svg+xml" href="../icon/logo_icon.svg">
 <meta name="description" content="BaHALA — Community-powered flood warning and reporting system for Barangay Marulas, Valenzuela City.">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -35,6 +36,7 @@
       <a class="nav-link" data-page="map">Hazard Map</a>
       <a class="nav-link" data-page="report">Report</a>
       <a class="nav-link" data-page="view">Reports</a>
+      <a class="nav-link" data-page="notifications">Notifications</a>
       <a class="nav-link" data-page="contacts">Emergency</a>
     </nav>
 
@@ -64,6 +66,7 @@
     <a class="mobile-nav-link" data-page="map">🗺️ Hazard Map</a>
     <a class="mobile-nav-link" data-page="report">📋 Report Issue</a>
     <a class="mobile-nav-link" data-page="view">📊 View Reports</a>
+    <a class="mobile-nav-link" data-page="notifications">🔔 Notifications</a>
     <a class="mobile-nav-link" data-page="contacts">🚨 Emergency</a>
     <a class="mobile-nav-link" id="mobileLoginLink" data-page="login">🔐 Sign In / Register</a>
     <a class="mobile-nav-link" href="lite.html">⚡ Lite Mode (Low Bandwidth)</a>
@@ -114,6 +117,10 @@
           </div>
           <div class="pw-strength-label" id="pwStrengthLabel"></div>
         </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" id="regConfirmPassword" placeholder="Repeat password">
+        </div>
         <button class="btn-auth" id="signUpBtn">Create Account →</button>
         <p class="auth-note">Admin accounts are assigned by the Barangay office only.</p>
       </div>
@@ -157,7 +164,7 @@
     <div class="container">
       <div class="feature-grid">
         <div class="feature-card fc-blue" data-page="map"><div class="fc-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg></div><div class="fc-content"><h3>Hazard Map</h3><p>Interactive flood risk zones and live incident markers for Brgy. Marulas</p></div><div class="fc-arrow">→</div></div>
-        <div class="feature-card fc-red" data-page="contacts"><div class="fc-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/></svg></div><div class="fc-content"><h3>Early Warning</h3><p>Automated alerts when Tullahan River levels exceed critical thresholds</p></div><div class="fc-arrow">→</div></div>
+        <div class="feature-card fc-red" data-page="contacts"><div class="fc-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/></svg></div><div class="fc-content"><h3>Emergency Hotlines</h3><p>Rescue Hotlines of the Local Government and the Barangay</p></div><div class="fc-arrow">→</div></div>
         <div class="feature-card fc-teal" data-page="report"><div class="fc-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div><div class="fc-content"><h3>Community Reports</h3><p>Geo-tagged incidents shared in real time with all Marulas residents</p></div><div class="fc-arrow">→</div></div>
       </div>
     </div>
@@ -425,6 +432,31 @@
   </div>
 </main>
 
+<!-- ============================================================ PAGE: NOTIFICATIONS ============================================================ -->
+<main id="page-notifications" class="page">
+  <div class="page-header">
+    <div class="container">
+      <div class="page-header-inner">
+        <button class="back-btn" data-page="home">← Back</button>
+        <div><h1>🔔 Alert History</h1><p>Record of hazard zones and critical community alerts</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="container" style="padding-top:24px; padding-bottom:60px; max-width:800px;">
+    <div class="section-header" style="margin-bottom:20px;">
+      <h2>Recent Notifications</h2>
+      <button class="btn-refresh" id="refreshNotifsBtn">↻ Refresh</button>
+    </div>
+    <div id="notificationsList" class="notifications-list">
+      <div class="empty-state">
+        <div class="empty-icon">🔔</div>
+        <h3>No alerts yet</h3>
+        <p>Stay tuned for real-time hazard updates from the Barangay Admin.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
 <!-- ============================================================ PAGE: PROFILE ============================================================ -->
 <main id="page-profile" class="page">
   <div class="page-header">
@@ -481,6 +513,17 @@
 
 <!-- FAB -->
 <a href="tel:911" class="fab-emergency"><span>🚨</span><span class="fab-label">SOS</span></a>
+
+<!-- HAZARD NOTIFICATION ALERT -->
+<div class="hazard-notification" id="hazardNotification">
+  <div class="hn-icon">🚨</div>
+  <div class="hn-content">
+    <div class="hn-title" id="hnTitle">Hazard Alert</div>
+    <div class="hn-body" id="hnBody">A new risk zone has been updated.</div>
+    <button class="hn-action" id="hnAction">View on Map</button>
+  </div>
+  <button class="hn-close" id="hnClose">✕</button>
+</div>
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>

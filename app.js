@@ -77,11 +77,48 @@ function showToast(msg, dur = 3500) {
   setTimeout(() => t.classList.remove('show'), dur);
 }
 
+function showHazardNotification(title, body, actionLabel = 'View on Map', onAction = null) {
+  const el = $('#hazardNotification');
+  if (!el) return;
+  
+  $('#hnTitle').textContent = title;
+  $('#hnBody').textContent  = body;
+  const actionBtn = $('#hnAction');
+  
+  actionBtn.textContent = actionLabel;
+  actionBtn.onclick = () => {
+    if (onAction) onAction();
+    el.classList.remove('show');
+  };
+
+  el.classList.add('show');
+
+  // Auto-hide after 12 seconds
+  if (el._timer) clearTimeout(el._timer);
+  el._timer = setTimeout(() => {
+    el.classList.remove('show');
+  }, 12000);
+}
+
+$('#hnClose').addEventListener('click', () => {
+  const el = $('#hazardNotification');
+  el.classList.remove('show');
+  if (el._timer) clearTimeout(el._timer);
+});
+
 // ============================================================
 // NAVIGATION
 // ============================================================
-function navigate(page) {
+function navigate(page, pushHash = true) {
   if (!page) return;
+  
+  // Persistence: Stay on current page on refresh by using URL Hash
+  if (pushHash) {
+    if (window.location.hash.slice(1) !== page) {
+      window.location.hash = page;
+    }
+  }
+
   $$('.page').forEach(p => p.classList.remove('active'));
   const target = $(`#page-${page}`);
   if (!target) return;
@@ -107,7 +144,13 @@ function navigate(page) {
   if (page === 'map')     initMap();
   if (page === 'report')  resetForm();
   if (page === 'profile') initProfile();
+  if (page === 'notifications') initNotifications();
 }
+
+window.addEventListener('hashchange', () => {
+  const page = window.location.hash.slice(1) || 'home';
+  if (page !== App.currentPage) navigate(page, false);
+});
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-page]');
@@ -198,7 +241,10 @@ $('#signUpBtn').addEventListener('click', async () => {
   const name     = $('#regName').value.trim();
   const email    = $('#regEmail').value.trim();
   const password = $('#regPassword').value;
-  if (!name || !email || !password) { showToast('⚠️ Fill in all fields.'); return; }
+  const confirmPw = $('#regConfirmPassword').value;
+
+  if (!name || !email || !password || !confirmPw) { showToast('⚠️ Fill in all fields.'); return; }
+  if (password !== confirmPw) { showToast('⚠️ Passwords do not match.'); return; }
 
   const { score } = Database.checkPasswordStrength(password);
   if (score < 2) { showToast('⚠️ Password too weak — add uppercase letters, numbers, or symbols.'); return; }
@@ -1274,6 +1320,103 @@ function detectLowBandwidth() {
 }
 
 // ============================================================
+// NOTIFICATIONS PAGE
+// ============================================================
+async function initNotifications() {
+  const list = $('#notificationsList');
+  if (!list) return;
+
+  try {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray-400)">Checking for alerts…</div>';
+    
+    // Fetch both zones and reports
+    const [zones, reports] = await Promise.all([Database.getZones(), Database.getAll()]);
+    
+    // Combine into a generic "Alert" object
+    const alerts = [
+      ...zones.map(z => ({
+        type: 'zone',
+        title: z.name,
+        body: z.description || `${cap(z.level)} risk zone established.`,
+        level: z.level,
+        date: z.created_at || z.updated_at || new Date().toISOString(),
+        id: z.id,
+        coordinates: z.coordinates
+      })),
+      ...reports.filter(r => r.severity === 'critical' || r.severity === 'high').map(r => ({
+        type: 'report',
+        title: r.title,
+        body: `Reported at ${r.street}. ${r.description.slice(0, 100)}...`,
+        level: r.severity,
+        date: r.date,
+        id: r.id
+      }))
+    ];
+
+    // Sort by date desc
+    alerts.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (alerts.length === 0) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🔔</div>
+          <h3>No alerts yet</h3>
+          <p>Stay tuned for real-time hazard updates from the Barangay Admin.</p>
+        </div>
+      `;
+      return;
+    }
+
+    list.innerHTML = alerts.map(a => `
+      <div class="notif-item sev-${a.level}" data-type="${a.type}" data-id="${a.id}">
+        <div class="notif-icon">${a.type === 'zone' ? '🗺️' : sevEmoji(a.level)}</div>
+        <div class="notif-content">
+          <div class="notif-header">
+            <span class="notif-title">${a.title}</span>
+            <span class="notif-time">${formatDate(a.date)}</span>
+          </div>
+          <p class="notif-body">${a.body}</p>
+          <div class="notif-meta">
+            <span class="notif-badge ${a.type}">${a.type === 'zone' ? 'Map Zone' : 'Incident'}</span>
+            <span class="notif-badge" style="background:var(--gray-100);color:var(--gray-500)">${cap(a.level)} Risk</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Add click listeners to items
+    list.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        const { type, id } = el.dataset;
+        if (type === 'report') {
+          openModal(id);
+        } else {
+          navigate('map');
+          // Wait for map to init
+          if (!App.map) await initMap();
+          
+          const zone = zones.find(z => z.id === id);
+          if (zone && zone.coordinates && App.map && window.L) {
+             const bounds = window.L.latLngBounds(zone.coordinates);
+             App.map.flyToBounds(bounds, { padding: [50, 50], duration: 1.5 });
+          }
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error('Notif init error:', err);
+    list.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${err.message}</p></div>`;
+  }
+}
+
+$('#refreshNotifsBtn').addEventListener('click', async () => {
+  showToast('↻ Refreshing alerts…');
+  await initNotifications();
+  showToast('✅ Alerts updated.');
+});
+
+// ============================================================
 // MOBILE MENU
 // ============================================================
 $('#mobileMenuBtn').addEventListener('click', function() {
@@ -1285,10 +1428,45 @@ $('#mobileMenuBtn').addEventListener('click', function() {
 // REAL-TIME SYNC
 // ============================================================
 function initRealtime() {
-  Database.subscribe(async () => {
+  Database.subscribe(async (payload) => {
+    // If it's a zone update from someone else, show specialized notification
+    if (payload.table === 'hazard_zones') {
+      const zone = payload.new || payload.old;
+      const isInsert = payload.eventType === 'INSERT';
+      const isUpdate = payload.eventType === 'UPDATE';
+      
+      // Skip if this change was made by the current user
+      if (zone.created_by === App.currentUser?.email) return;
+
+      if (isInsert || isUpdate) {
+        const title = isInsert ? '🚨 New Risk Zone Added' : '📏 Risk Zone Updated';
+        const body  = `Admin has ${isInsert ? 'added' : 'updated'} the "${zone.name}" risk zone (${zone.level} risk).`;
+        
+        showHazardNotification(title, body, 'View on Map', () => {
+          navigate('map');
+          if (App.map && window.L) {
+             // If we have coordinates, fly to it
+             if (zone.coordinates && zone.coordinates.length > 0) {
+               const bounds = window.L.latLngBounds(zone.coordinates);
+               App.map.flyToBounds(bounds, { padding: [50, 50], duration: 1.5 });
+             }
+          }
+        });
+
+        // Always refresh if on map
+        if (App.currentPage === 'map' && typeof App.renderHazardZones === 'function') {
+           await App.renderHazardZones();
+        }
+      }
+      return;
+    }
+
+    // Default report update
     showToast('🔄 Data updated by another user.');
     if (App.currentPage === 'home') await initHome();
     if (App.currentPage === 'view') await loadReports();
+    if (App.currentPage === 'map')  await refreshMapMarkers();
+    if (App.currentPage === 'notifications') await initNotifications();
   });
 }
 
@@ -1319,6 +1497,17 @@ function updateDbIndicator(online) {
 // ============================================================
 // BOOT
 // ============================================================
+function clearAuthForms() {
+  // Clear sensitive data on refresh/load as requested
+  if ($('#loginPassword')) $('#loginPassword').value = '';
+  if ($('#regName'))     $('#regName').value = '';
+  if ($('#regEmail'))    $('#regEmail').value = '';
+  if ($('#regPassword')) $('#regPassword').value = '';
+  if ($('#regConfirmPassword')) $('#regConfirmPassword').value = '';
+  // Optional: clear login email too if preferred
+  // if ($('#loginEmail')) $('#loginEmail').value = '';
+}
+
 async function boot() {
   const online = await Database.init();
   updateDbIndicator(online);
@@ -1337,7 +1526,12 @@ async function boot() {
   // Detect slow connection
   detectLowBandwidth();
 
-  navigate('home');
+  // Clear forms
+  clearAuthForms();
+
+  // Load last visited page or home
+  const startPage = window.location.hash.slice(1) || 'home';
+  navigate(startPage, false);
 
   console.log('%cBaHALA v2 — Brgy. Marulas Flood Warning System', 'color:#005F99;font-size:14px;font-weight:bold');
   console.log('%cSupabase:', 'color:#64748B', online ? '✅ Connected' : '⚠️ Not configured (localStorage mode)');

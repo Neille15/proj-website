@@ -87,6 +87,7 @@ textarea{resize:vertical;min-height:80px}
 .full-mode-banner{background:#E0F3FF;border:1px solid rgba(0,95,153,0.2);padding:10px 14px;font-size:0.8rem;color:var(--blue);border-radius:8px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .full-mode-banner a{font-weight:700}
 </style>
+  <script src="config.js" onerror="console.warn('Config not loaded in lite mode')"></script>
 </head>
 <body>
 
@@ -95,6 +96,7 @@ textarea{resize:vertical;min-height:80px}
     BaHALA <span>Brgy. Marulas Flood Warning</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px">
+    <span class="lite-tag" id="liteDbStatus">Checking...</span>
     <span class="lite-tag">⚡ LITE</span>
     <a href="index.html" class="back-full">Full Site</a>
   </div>
@@ -287,33 +289,61 @@ function formatDate(iso) {
 }
 
 async function initLite() {
-  // Try to load config and database from parent scripts
-  // Since lite.html is standalone, use localStorage or Supabase directly
-  const config = getConfig();
+  const statusEl = document.getElementById('liteDbStatus');
+  // Use the shared config from config.js loaded in <head>
+  const config = (typeof SUPABASE_CONFIG !== 'undefined') ? SUPABASE_CONFIG : null;
 
   if (config && config.url && !config.url.includes('YOUR_PROJECT_ID')) {
     try {
       const sdk = document.createElement('script');
       sdk.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
       sdk.onload = async () => {
-        supabase = window.supabase.createClient(config.url, config.anonKey);
-        isOnline = true;
-        await loadLiteData();
+        try {
+          supabase = window.supabase.createClient(config.url, config.anonKey);
+          isOnline = true;
+          statusEl.textContent = '🟢 Live Sync';
+          statusEl.style.background = '#166534';
+          console.log("⚡ BaHALA Lite: Connected to Supabase");
+          await loadLiteData();
+          initRealtimeLite(); // Start real-time sync
+        } catch (clientErr) {
+          console.error("Supabase client init failed:", clientErr);
+          statusEl.textContent = '🟠 Local DB';
+          statusEl.style.background = '#92400E';
+          await loadLiteData(); 
+        }
       };
-      sdk.onerror = async () => { await loadLiteData(); };
+      sdk.onerror = async () => { 
+        statusEl.textContent = '🟠 Local DB';
+        statusEl.style.background = '#92400E';
+        await loadLiteData(); 
+      };
       document.head.appendChild(sdk);
     } catch(e) {
+      statusEl.textContent = '🟠 Local DB';
+      statusEl.style.background = '#92400E';
       await loadLiteData();
     }
   } else {
+    statusEl.textContent = '🟠 Local DB';
+    statusEl.style.background = '#92400E';
     await loadLiteData();
   }
 }
 
-function getConfig() {
-  // Try to load config.js values if available in same origin
-  if (typeof SUPABASE_CONFIG !== 'undefined') return SUPABASE_CONFIG;
-  return null;
+function initRealtimeLite() {
+  if (!supabase || !isOnline) return;
+
+  // Listen for ALL changes on reports table for instant UI updates
+  supabase
+    .channel('lite-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, 
+      async (payload) => {
+        console.log("🔄 Lite Sync: Data changed, refreshing list...");
+        await loadLiteData();
+        showLiteToast('🔄 Data updated');
+      })
+    .subscribe();
 }
 
 async function loadLiteData() {
@@ -433,8 +463,6 @@ async function submitLiteReport() {
 window.addEventListener('DOMContentLoaded', initLite);
 </script>
 
-<!-- Load config.js for Supabase credentials if available -->
-<script src="config.js" onerror="console.warn('Config not loaded in lite mode')"></script>
-
+<!-- Main Logic is above in the script tag -->
 </body>
 </html>
