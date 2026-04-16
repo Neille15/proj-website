@@ -180,6 +180,9 @@ function setUser(user) {
   $('#userAvatar').textContent    = initials;
   $('#userNameDisplay').textContent = name;
   $('#userRoleDisplay').textContent = App.isAdmin ? '🛡️ Admin' : '👤 Resident';
+  if ($('#adminAddNewsBtn')) {
+    $('#adminAddNewsBtn').style.display = App.isAdmin ? 'flex' : 'none';
+  }
   if ($('#adminDrawToolbar')) {
     $('#adminDrawToolbar').style.display = (App.isAdmin && App.currentPage === 'map') ? 'flex' : 'none';
   }
@@ -190,6 +193,7 @@ function setUser(user) {
 function clearUser() {
   App.currentUser = null;
   App.isAdmin     = false;
+  if ($('#adminAddNewsBtn')) $('#adminAddNewsBtn').style.display = 'none';
   if ($('#adminDrawToolbar')) $('#adminDrawToolbar').style.display = 'none';
   $('#userMenu').style.display    = 'none';
   $('#loginNavBtn').style.display = 'block';
@@ -322,9 +326,149 @@ async function initHome() {
     list.querySelectorAll('.recent-item').forEach(el => {
       el.addEventListener('click', () => openModal(el.dataset.id));
     });
+    await initNews();
   } catch (err) {
     console.error('Home init error:', err);
   }
+}
+
+// ============================================================
+// NEWS & PLANS
+// ============================================================
+async function initNews() {
+  const list = $('#newsGrid');
+  if (!list) return;
+
+  try {
+    const news = await Database.getNews();
+    if (news.length === 0) {
+      list.innerHTML = '<div class="empty-state-small" style="grid-column: 1/-1;">No plans or activities posted yet.</div>';
+      return;
+    }
+
+    const tagLabels = {
+      plan: '📋 Flood Mitigation Plan',
+      activity: '🌿 Community Activity',
+      alert: '🌊 Early Warning System',
+      training: '🚒 Training',
+      project: '🏗️ Infrastructure Project'
+    };
+
+    list.innerHTML = news.map(item => `
+      <article class="news-card ${item.is_featured ? 'news-featured' : ''}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div class="news-tag news-tag-${item.tag}">${tagLabels[item.tag] || item.tag}</div>
+          ${App.isAdmin ? `
+            <div style="display:flex; gap:6px;">
+              <button class="action-btn" onclick="App._editNews('${item.id}')" title="Edit">📝</button>
+              <button class="action-btn delete-btn" onclick="App._deleteNews('${item.id}')" title="Delete">🗑️</button>
+            </div>
+          ` : ''}
+        </div>
+        <h3>${item.title}</h3>
+        <p>${item.content}</p>
+        <div class="news-footer">
+          <span class="news-source">${item.source ? '📄 ' + item.source : ''}</span>
+          <span class="news-date">${item.date_label || ''}</span>
+        </div>
+      </article>
+    `).join('');
+  } catch (err) {
+    console.error('News fetch error:', err);
+    list.innerHTML = '<div class="empty-state-small">Failed to load news.</div>';
+  }
+}
+
+App._editNews = async (id) => {
+  try {
+    const news = await Database.getNews();
+    const item = news.find(n => n.id === id);
+    if (!item) return;
+
+    App.editingNewsId = id;
+    $('#newsModalTitle').textContent = 'Edit Plan / Activity';
+    $('#newsSaveBtn').textContent = 'Update Item';
+    
+    $('#newsTitle').value = item.title;
+    $('#newsTag').value = item.tag;
+    $('#newsContent').value = item.content;
+    $('#newsSource').value = item.source || '';
+    $('#newsDateLabel').value = item.date_label || '';
+    $('#newsIsFeatured').checked = item.is_featured;
+
+    $('#newsModalOverlay').classList.add('open');
+  } catch (err) {
+    showToast('❌ Error loading item: ' + err.message);
+  }
+};
+
+App._deleteNews = async (id) => {
+  if (!confirm('Are you sure you want to delete this plan/activity?')) return;
+  try {
+    await Database.deleteNews(id);
+    showToast('🗑️ Item deleted');
+    initNews();
+  } catch (err) {
+    showToast('❌ Error deleting: ' + err.message);
+  }
+};
+
+// News Modal Handlers
+if ($('#adminAddNewsBtn')) {
+  $('#adminAddNewsBtn').addEventListener('click', () => {
+    App.editingNewsId = null;
+    $('#newsModalTitle').textContent = 'Add Plan / Activity';
+    $('#newsSaveBtn').textContent = 'Save Item';
+    
+    $('#newsTitle').value = '';
+    $('#newsTag').selectedIndex = 0;
+    $('#newsContent').value = '';
+    $('#newsSource').value = '';
+    $('#newsDateLabel').value = '';
+    $('#newsIsFeatured').checked = false;
+
+    $('#newsModalOverlay').classList.add('open');
+  });
+}
+
+if ($('#newsCancelBtn')) {
+  $('#newsCancelBtn').addEventListener('click', () => {
+    $('#newsModalOverlay').classList.remove('open');
+  });
+}
+
+if ($('#newsSaveBtn')) {
+  $('#newsSaveBtn').addEventListener('click', async () => {
+    const title = $('#newsTitle').value.trim();
+    const tag = $('#newsTag').value;
+    const content = $('#newsContent').value.trim();
+    const source = $('#newsSource').value.trim();
+    const dateLabel = $('#newsDateLabel').value.trim();
+    const isFeatured = $('#newsIsFeatured').checked;
+
+    if (!title || !content) {
+      showToast('⚠️ Title and content are required.');
+      return;
+    }
+
+    $('#newsSaveBtn').textContent = 'Saving...';
+    try {
+      const data = { title, tag, content, source, dateLabel, isFeatured };
+      if (App.editingNewsId) {
+        await Database.updateNews(App.editingNewsId, data);
+        showToast('✅ Item updated');
+      } else {
+        await Database.createNews(data);
+        showToast('✅ Item added');
+      }
+      $('#newsModalOverlay').classList.remove('open');
+      initNews();
+    } catch (err) {
+      showToast('❌ Error: ' + err.message);
+    } finally {
+      $('#newsSaveBtn').textContent = App.editingNewsId ? 'Update Item' : 'Save Item';
+    }
+  });
 }
 
 // ============================================================

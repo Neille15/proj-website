@@ -182,52 +182,13 @@
     <div class="container">
       <div class="section-header">
         <h2>Brgy. Marulas — Flood Plans &amp; Activities</h2>
-        <span class="section-badge">Valenzuela City DRRMC</span>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="section-badge">Valenzuela City DRRMC</span>
+          <button class="btn-primary" id="adminAddNewsBtn" style="display:none; padding:4px 12px; font-size:0.75rem; min-height:32px;">+ Add Plan/Activity</button>
+        </div>
       </div>
-      <div class="news-grid">
-
-        <article class="news-card news-featured">
-          <div class="news-tag news-tag-plan">📋 Flood Mitigation Plan</div>
-          <h3>2024–2026 Barangay Flood Resilience Program</h3>
-          <p>Brgy. Marulas has adopted a 3-year flood resilience roadmap aligned with Valenzuela City's Comprehensive Land Use Plan. Key measures include the desilting of Tullahan River tributaries, elevation of critical roads along Marulas Road, and construction of 1.2 km of concrete drainage channels co-funded by the DPWH and City Government under the Valenzuela Urban Flood Resilience Initiative.</p>
-          <div class="news-footer"><span class="news-source">📄 Barangay Resolution No. 2024-07</span><span class="news-date">March 2024</span></div>
-        </article>
-
-        <article class="news-card">
-          <div class="news-tag news-tag-activity">🌿 Community Activity</div>
-          <h3>Annual Drainage Cleaning Drive (Brigada Kalikasan)</h3>
-          <p>Every June before the monsoon season, residents join the Brigada Kalikasan — a barangay-wide drainage and creek cleaning drive. In 2024, over 400 volunteers participated, clearing 3.5 tons of solid waste from Marulas' drainage network and improving canal flow by an estimated 60%.</p>
-          <div class="news-footer"><span class="news-source">🌿 Brgy. Marulas Environment Committee</span><span class="news-date">June 2024</span></div>
-        </article>
-
-        <article class="news-card">
-          <div class="news-tag news-tag-alert">🌊 Early Warning System</div>
-          <h3>Tullahan River Flood Sensors Now Operational</h3>
-          <p>The DOST-PAGASA and Valenzuela DRRMO jointly installed water level sensors along the Tullahan River near Marulas. Residents receive SMS alerts when water reaches Warning (1.5m), Critical (2.0m), and Danger (2.5m) thresholds — giving households up to 2 hours of advance warning before flooding.</p>
-          <div class="news-footer"><span class="news-source">🌊 Valenzuela City DRRMO</span><span class="news-date">August 2024</span></div>
-        </article>
-
-        <article class="news-card">
-          <div class="news-tag news-tag-activity">🚒 Training</div>
-          <h3>BDRRMC Water Rescue &amp; Life Support Training</h3>
-          <p>Brgy. Marulas BDRRMC conducted a 2-day Water Rescue and Basic Life Support training for 35 barangay tanod and VAWC members in partnership with the Philippine Red Cross Valenzuela Chapter. Training covered swift water rescue, CPR, and evacuation protocols for flood scenarios.</p>
-          <div class="news-footer"><span class="news-source">🏥 Philippine Red Cross — Valenzuela</span><span class="news-date">September 2024</span></div>
-        </article>
-
-        <article class="news-card">
-          <div class="news-tag news-tag-plan">🏗️ Infrastructure</div>
-          <h3>Box Culvert Project — Marulas Creek Improvement</h3>
-          <p>A ₱8.2-million box culvert improvement project along Marulas Creek has been approved under the Valenzuela City Infrastructure Fund. The project will replace aging canal structures to handle a 25-year flood return period event and is scheduled to begin Q1 2025, expected to protect over 1,500 households.</p>
-          <div class="news-footer"><span class="news-source">🏗️ City Engineering Office, Valenzuela</span><span class="news-date">December 2024</span></div>
-        </article>
-
-        <article class="news-card">
-          <div class="news-tag news-tag-activity">🔔 Evacuation Drill</div>
-          <h3>Annual Flood Evacuation Simulation — 1,200 Participants</h3>
-          <p>Brgy. Marulas conducted its annual Flood Evacuation Drill with 1,200 resident participants. The drill tested evacuation routes to Marulas Elementary School and the Barangay Hall and introduced the new color-coded flood signal system aligned with Valenzuela City's unified warning protocols.</p>
-          <div class="news-footer"><span class="news-source">🔔 Brgy. Marulas BDRRMC</span><span class="news-date">October 2024</span></div>
-        </article>
-
+      <div id="newsGrid" class="news-grid">
+        <!-- Rendered by JS -->
       </div>
 
       <div class="signal-guide">
@@ -500,6 +461,37 @@
       <div class="modal-actions" style="margin-top:20px;">
         <button class="btn-cancel" id="zoneCancelBtn">Cancel</button>
         <button class="btn-submit" id="zoneSaveBtn">Save Zone</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="newsModalOverlay">
+  <div class="modal" id="newsModal">
+    <div class="modal-body">
+      <h3 id="newsModalTitle" style="margin-bottom:16px">Add Plan / Activity</h3>
+      <div class="form-group" style="margin-top:10px;"><label>Title *</label><input type="text" id="newsTitle" placeholder="e.g. 2024 Drainage Cleaning"></div>
+      <div class="form-group" style="margin-top:14px;"><label>Type *</label>
+        <div class="select-wrapper">
+          <select id="newsTag">
+            <option value="plan">📋 Flood Mitigation Plan</option>
+            <option value="activity">🌿 Community Activity</option>
+            <option value="alert">🌊 Early Warning System</option>
+            <option value="training">🚒 Training</option>
+            <option value="project">🏗️ Infrastructure Project</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:14px;"><label>Description / Content *</label><textarea id="newsContent" rows="4" placeholder="Details about this plan or activity..."></textarea></div>
+      <div class="form-grid" style="margin-top:14px;">
+        <div class="form-group"><label>Source / Reference</label><input type="text" id="newsSource" placeholder="e.g. BDRRMC Office"></div>
+        <div class="form-group"><label>Date Label</label><input type="text" id="newsDateLabel" placeholder="e.g. March 2024"></div>
+      </div>
+      <div class="form-group" style="margin-top:14px;">
+        <label class="checkbox-label"><input type="checkbox" id="newsIsFeatured"><span class="checkmark"></span> Highlight as Featured (Full Width)</label>
+      </div>
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn-cancel" id="newsCancelBtn">Cancel</button>
+        <button class="btn-submit" id="newsSaveBtn">Save Item</button>
       </div>
     </div>
   </div>

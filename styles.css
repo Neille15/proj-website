@@ -199,6 +199,8 @@ a{text-decoration:none;color:inherit}
 .news-tag-plan{background:var(--light-bg);color:var(--primary)}
 .news-tag-activity{background:var(--teal-light);color:var(--teal)}
 .news-tag-alert{background:var(--light-bg);color:#0077B6}
+.news-tag-training{background:#F0FDF4;color:#16A34A}
+.news-tag-project{background:#FEF2F2;color:#991B1B}
 .news-card h3{font-size:0.95rem;line-height:1.35}
 .news-card p{font-size:0.82rem;color:var(--gray-600,var(--gray-700));line-height:1.6;flex:1}
 .news-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:8px;border-top:1px solid var(--gray-100)}

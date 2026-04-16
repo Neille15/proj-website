@@ -69,6 +69,11 @@ const Database = (() => {
           console.log('[DB] Real-time change (zones):', payload.eventType);
           callback({ table: 'hazard_zones', ...payload });
         })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'news_items' },
+        (payload) => {
+          console.log('[DB] Real-time change (news):', payload.eventType);
+          callback({ table: 'news_items', ...payload });
+        })
       .subscribe();
   }
 
@@ -485,6 +490,84 @@ const Database = (() => {
   }
 
   /* ----------------------------------------------------------
+     NEWS ITEMS (Plans & Activities)
+     ---------------------------------------------------------- */
+  async function getNews() {
+    if (isSupabaseReady) {
+      const { data, error } = await supabase
+        .from('news_items')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) {
+        if (error.code === '42P01') return _localGetNews();
+        throw error;
+      }
+      return data;
+    }
+    return _localGetNews();
+  }
+
+  async function createNews(newsData) {
+    const payload = {
+      title: newsData.title,
+      content: newsData.content,
+      tag: newsData.tag, // 'plan', 'activity', 'alert', etc.
+      source: newsData.source || null,
+      date_label: newsData.dateLabel || null,
+      is_featured: newsData.isFeatured || false,
+      created_by: (await Auth.getUser())?.email || 'Local Admin',
+    };
+
+    if (isSupabaseReady) {
+      const { data, error } = await supabase.from('news_items').insert(payload).select().single();
+      if (error) throw error;
+      return data;
+    }
+    const all = _localGetNews();
+    const newItem = { id: 'NW-' + Date.now().toString(36).toUpperCase(), ...payload, created_at: new Date().toISOString() };
+    all.unshift(newItem);
+    localStorage.setItem('bahala_news_v3', JSON.stringify(all));
+    return newItem;
+  }
+
+  async function updateNews(id, newsData) {
+    const payload = {
+      ...newsData,
+      updated_at: new Date().toISOString()
+    };
+    if (isSupabaseReady) {
+      const { data, error } = await supabase.from('news_items').update(payload).eq('id', id).select().maybeSingle();
+      if (error) throw error;
+      return data;
+    }
+    const all = _localGetNews();
+    const idx = all.findIndex(n => n.id === id);
+    if (idx === -1) throw new Error('News item not found');
+    all[idx] = { ...all[idx], ...payload };
+    localStorage.setItem('bahala_news_v3', JSON.stringify(all));
+    return all[idx];
+  }
+
+  async function deleteNews(id) {
+    if (isSupabaseReady) {
+      const { error } = await supabase.from('news_items').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      const all = _localGetNews();
+      const filtered = all.filter(n => n.id !== id);
+      localStorage.setItem('bahala_news_v3', JSON.stringify(filtered));
+    }
+  }
+
+  function _localGetNews() {
+    try {
+      const local = localStorage.getItem('bahala_news_v3');
+      if (local) return JSON.parse(local);
+      return [];
+    } catch { return []; }
+  }
+
+  /* ----------------------------------------------------------
      NORMALIZATION — convert Supabase snake_case to camelCase
      ---------------------------------------------------------- */
   function _normalizeOne(r) {
@@ -573,6 +656,14 @@ const Database = (() => {
       { id: 'RPT-SEED005', title: 'Rising water level at creek bridge', type: 'rising-water-level', severity: 'low', barangay: 'Brgy. Marulas', street: 'Marulas-Tullahan bridge area', description: 'Water level elevated but manageable. Monitoring ongoing.', reporterName: 'Liza Flores', reporterContact: '09451234567', anonymous: false, status: 'resolved', resolvedAt: new Date(Date.now() - 2 * 3600000).toISOString(), imageUrl: null, date: new Date(Date.now() - 24 * 3600000).toISOString() },
     ];
     localStorage.setItem(LOCAL_KEY, JSON.stringify(samples));
+    
+    const newsSamples = [
+      { id: 'NW-SEED001', title: '2024–2026 Barangay Flood Resilience Program', content: 'Brgy. Marulas has adopted a 3-year flood resilience roadmap aligned with Valenzuela City\'s Comprehensive Land Use Plan. Key measures include the desilting of Tullahan River tributaries, elevation of critical roads along Marulas Road, and construction of 1.2 km of concrete drainage channels co-funded by the DPWH and City Government under the Valenzuela Urban Flood Resilience Initiative.', tag: 'plan', source: 'Barangay Resolution No. 2024-07', date_label: 'March 2024', is_featured: true, created_at: new Date().toISOString() },
+      { id: 'NW-SEED002', title: 'Annual Drainage Cleaning Drive (Brigada Kalikasan)', content: 'Every June before the monsoon season, residents join the Brigada Kalikasan — a barangay-wide drainage and creek cleaning drive. In 2024, over 400 volunteers participated, clearing 3.5 tons of solid waste from Marulas\' drainage network and improving canal flow by an estimated 60%.', tag: 'activity', source: 'Brgy. Marulas Environment Committee', date_label: 'June 2024', is_featured: false, created_at: new Date().toISOString() },
+      { id: 'NW-SEED003', title: 'Tullahan River Flood Sensors Now Operational', content: 'The DOST-PAGASA and Valenzuela DRRMO jointly installed water level sensors along the Tullahan River near Marulas. Residents receive SMS alerts when water reaches Warning (1.5m), Critical (2.0m), and Danger (2.5m) thresholds — giving households up to 2 hours of advance warning before flooding.', tag: 'alert', source: 'Valenzuela City DRRMO', date_label: 'August 2024', is_featured: false, created_at: new Date().toISOString() },
+    ];
+    localStorage.setItem('bahala_news_v3', JSON.stringify(newsSamples));
+
     localStorage.setItem(SEED_KEY, '1');
   }
 
@@ -588,6 +679,7 @@ const Database = (() => {
     updateStatus, deleteReport,
     query, stats,
     getZones, createZone, updateZone, deleteZone,
+    getNews, createNews, updateNews, deleteNews,
     purgeExpiredResolved,
     get isOnline() { return isSupabaseReady; },
   };

@@ -157,9 +157,33 @@ const APP_CONFIG = {
      (auth.jwt() ->> 'role') = 'admin'
    );
 
-   -- Enable real-time on reports and hazard_zones tables
    ALTER PUBLICATION supabase_realtime ADD TABLE reports;
    ALTER PUBLICATION supabase_realtime ADD TABLE hazard_zones;
+
+   -- ============================================================
+   -- NEWS ITEMS TABLE (Plans & Activities)
+   -- ============================================================
+   CREATE TABLE IF NOT EXISTS news_items (
+     id               TEXT PRIMARY KEY DEFAULT 'NW-' || gen_random_uuid()::text,
+     title            TEXT NOT NULL,
+     content          TEXT NOT NULL,
+     tag              TEXT NOT NULL,
+     source           TEXT,
+     date_label       TEXT,
+     is_featured      BOOLEAN DEFAULT FALSE,
+     created_by       TEXT,
+     created_at       TIMESTAMPTZ DEFAULT now(),
+     updated_at       TIMESTAMPTZ DEFAULT now()
+   );
+
+   ALTER TABLE news_items ENABLE ROW LEVEL SECURITY;
+   CREATE POLICY "Anyone can read news items" ON news_items FOR SELECT USING (true);
+   CREATE POLICY "Admins can manage news items" ON news_items FOR ALL USING (
+     auth.email() = ANY(ARRAY['admin@marulas.gov.ph','bdrrmc@marulas.gov.ph','captain@marulas.gov.ph']) OR
+     (auth.jwt() ->> 'role') = 'admin'
+   );
+
+   ALTER PUBLICATION supabase_realtime ADD TABLE news_items;
 
    -- ============================================================
    -- SUPABASE STORAGE — Report Images
